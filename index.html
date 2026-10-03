@@ -36,10 +36,11 @@ input,textarea{font:inherit;color:inherit}
 #app{display:flex;height:100dvh;background:#fff;position:relative;overflow:hidden}
 #side{width:360px;border-right:1px solid var(--b);display:flex;flex-direction:column;flex-shrink:0}
 .sh{display:flex;align-items:center;gap:10px;padding:10px 14px}
-.sh h1{flex:1;font-size:22px;font-weight:800;color:var(--p)}
+.sh h1{flex:1;min-width:0;font-size:22px;font-weight:800;color:var(--p);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ib{width:40px;height:40px;border-radius:50%;background:var(--bg);font-size:20px;display:grid;place-items:center;flex-shrink:0}
 .ib:hover{background:#e4e6ea}
-#meBtn{border-radius:50%;flex-shrink:0}
+#meBtn{display:flex;align-items:center;gap:6px;padding:4px 12px 4px 4px;border-radius:24px;background:var(--bg);font-weight:600;font-size:14px;flex-shrink:0}
+#meBtn:hover{background:#e4e6ea}
 #conn{background:#fff3cd;color:#856404;font-size:12px;text-align:center;padding:4px}
 #q{margin:0 14px 8px;padding:10px 16px;border:1px solid transparent;background:var(--bg);border-radius:22px;font-size:16px}
 #q:focus{outline:0;background:#fff;border-color:var(--p)}
@@ -50,6 +51,7 @@ input,textarea{font:inherit;color:inherit}
 .sec{padding:10px 14px 4px;font-size:13px;color:var(--t2);font-weight:600}
 .av{position:relative;width:48px;height:48px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;color:#fff;font-weight:600;font-size:18px}
 .av.s{width:40px;height:40px;font-size:16px}
+.av.xs{width:32px;height:32px;font-size:14px}
 .av.l{width:96px;height:96px;font-size:38px;margin:0 auto}
 .av img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
 .av i{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;background:var(--on);border:2px solid #fff}
@@ -100,6 +102,8 @@ input,textarea{font:inherit;color:inherit}
 .modal h2{font-size:20px}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:20;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
 #lb img{max-width:100%;max-height:100%;object-fit:contain}
+@media(max-width:400px){.sh h1{font-size:19px}}
+@media(max-width:340px){#meBtn span{display:none}#meBtn{padding:4px}}
 @media(max-width:768px){
 #side{width:100%}
 #chat{position:absolute;inset:0;transform:translateX(100%);transition:transform .2s;z-index:5}
@@ -129,9 +133,9 @@ input,textarea{font:inherit;color:inherit}
 <div id="app" hidden>
   <aside id="side">
     <div class="sh">
-      <button id="meBtn" title="Мой профиль"></button>
       <h1>OVKGRAMM</h1>
       <button class="ib" id="newGroup" title="Новая группа">👥</button>
+      <button id="meBtn" title="Мой профиль"></button>
     </div>
     <div id="conn" hidden>Нет соединения, переподключаюсь…</div>
     <input id="q" placeholder="Поиск по имени или @юзернейму" autocomplete="off" autocapitalize="off">
@@ -260,6 +264,7 @@ function authUI() {
   $('#tglT').textContent = reg ? 'Уже есть аккаунт?' : 'Нет аккаунта?';
   $('#tgl').textContent = reg ? 'Войти' : 'Регистрация';
   $('#aerr').textContent = '';
+  $('#ap').autocomplete = reg ? 'new-password' : 'current-password';
 }
 $('#tgl').onclick = () => { reg = !reg; authUI(); };
 $('#authForm').onsubmit = async e => {
@@ -278,9 +283,9 @@ function boot() {
   $('#app').hidden = false;
   paintMe(); renderList(); connect();
 }
-const paintMe = () => { $('#meBtn').innerHTML = uav(me, 's'); };
+const paintMe = () => { $('#meBtn').innerHTML = uav(me, 'xs') + '<span>Профиль</span>'; };
 
-function logout() {
+function logout(msg) {
   localStorage.removeItem('ovk_user');
   me = null; cur = null; query = ''; found = []; pend = null; opened = false;
   if (ws) { ws.onclose = null; ws.close(); }
@@ -290,6 +295,22 @@ function logout() {
   $('#app').hidden = true; $('#app').classList.remove('open');
   $('#room').hidden = true; $('#empty').hidden = false;
   $('#auth').hidden = false;
+  authUI();
+  if (typeof msg === 'string') $('#aerr').textContent = msg;
+}
+
+// Проверяем, что аккаунт ещё есть на сервере. Сеть недоступна — остаёмся в аккаунте и ждём
+async function checkSession() {
+  try {
+    me = {...me, ...await api('/api/profile/' + me.id)};
+    save(); paintMe();
+  } catch (e) {
+    if (/найден/.test(e.message)) {
+      logout('Сервер не нашёл ваш аккаунт: данные на сервере были сброшены. Зарегистрируйтесь или войдите снова.');
+      return false;
+    }
+  }
+  return true;
 }
 
 /* ---------- Соединение ---------- */
@@ -299,6 +320,7 @@ function connect() {
   if (!me) return;
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
   ws.onopen = async () => {
+    if (!await checkSession()) return;
     ws.send(JSON.stringify({type: 'connect', userId: me.id}));
     $('#conn').hidden = true;
     await loadChats();
@@ -653,7 +675,7 @@ function myProfile() {
       me = d.user; save(); paintMe(); closeModal();
     } catch (x) { $('#perr').textContent = x.message; }
   };
-  $('#lo').onclick = logout;
+  $('#lo').onclick = () => logout();
 }
 
 function userProfile(u) {
@@ -760,11 +782,7 @@ if (window.visualViewport) {
 (async () => {
   authUI();
   try { me = JSON.parse(localStorage.getItem('ovk_user')); } catch { me = null; }
-  if (me) {
-    try { me = {...me, ...await api('/api/profile/' + me.id)}; save(); }
-    catch (e) { if (/найден/.test(e.message)) { me = null; localStorage.removeItem('ovk_user'); } }
-  }
-  if (me) boot();
+  if (me && await checkSession()) boot();
 })();
 </script>
 </body>
