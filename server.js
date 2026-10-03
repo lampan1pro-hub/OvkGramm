@@ -21,7 +21,9 @@ fs.mkdirSync(UP, { recursive: true });
 const F = {
     users: path.join(DIR, 'users.json'),
     messages: path.join(DIR, 'messages.json'),
-    chats: path.join(DIR, 'chats.json')
+    chats: path.join(DIR, 'chats.json'),
+    nfts: path.join(DIR, 'nfts.json'),
+    sessions: path.join(DIR, 'sessions.json')
 };
 
 // Чтение. Если файл повреждён — берём резервную копию (.bak).
@@ -266,6 +268,50 @@ app.put('/api/profile/:id', (req, res) => {
     res.json({ success: true, user: self(u) });
 });
 
+// ---------- NFT ----------
+app.get('/api/nfts/:userId', (req, res) => {
+    const userId = Number(req.params.userId);
+    const nfts = read(F.nfts) || [];
+    const userNfts = nfts.filter(n => n.ownerId === userId);
+    res.json(userNfts);
+});
+
+app.post('/api/nfts/send', (req, res) => {
+    const { senderId, receiverId } = req.body;
+    if (!senderId || !receiverId) return res.status(400).json({ error: 'Invalid' });
+    
+    const nfts = read(F.nfts) || [];
+    const nft = {
+        id: crypto.randomUUID(),
+        ownerId: receiverId,
+        senderId: senderId,
+        type: ['🎮', '⭐', '🚀', '👑', '💎', '🏆'][Math.floor(Math.random() * 6)],
+        sentAt: new Date().toISOString()
+    };
+    nfts.push(nft);
+    write(F.nfts, nfts);
+    
+    res.json({ success: true, nft });
+});
+
+app.post('/api/sessions/update', (req, res) => {
+    const { userId, sessionTime } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Invalid' });
+    
+    const sessions = read(F.sessions) || {};
+    sessions[userId] = sessionTime;
+    write(F.sessions, sessions);
+    
+    res.json({ success: true });
+});
+
+app.get('/api/sessions/:userId', (req, res) => {
+    const userId = req.params.userId;
+    const sessions = read(F.sessions) || {};
+    const time = sessions[userId] || 0;
+    res.json({ time });
+});
+
 // ---------- Чаты ----------
 app.get('/api/chats/:userId', (req, res) => {
     const me = Number(req.params.userId);
@@ -455,4 +501,4 @@ process.on('uncaughtException', e => console.error('Необработанная
 process.on('unhandledRejection', e => console.error('Необработанный промис:', e));
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 OVKGRAMM запущен: http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`🚀 SAIMONGRAM запущен: http://localhost:${PORT}`));
