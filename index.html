@@ -239,6 +239,31 @@
             overflow-x: hidden;
         }
 
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            padding: 0;
+            margin: 0;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            background: none;
+            border: none;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            border-bottom-color: var(--primary);
+            color: var(--primary);
+        }
+
         .user-item {
             padding: 12px 16px;
             cursor: pointer;
@@ -257,6 +282,48 @@
         .user-item.active {
             background: var(--primary-light);
             border-left-color: var(--primary);
+        }
+
+        .chat-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+            transition: all 0.2s;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .chat-item:hover {
+            background: var(--bg-light);
+        }
+
+        .chat-item.active {
+            background: var(--primary-light);
+            border-left-color: var(--primary);
+        }
+
+        .chat-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+
+        .chat-item-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .chat-item-time {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .chat-item-message {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .user-info {
@@ -526,6 +593,106 @@
             color: #155724;
         }
 
+        /* MODAL */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .profile-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .profile-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin: 0 auto 16px;
+        }
+
+        .profile-name {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .profile-info {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .profile-row {
+            padding: 12px;
+            background: var(--bg-light);
+            border-radius: 8px;
+        }
+
+        .profile-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .profile-value {
+            font-size: 15px;
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .profile-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .profile-actions .btn {
+            flex: 1;
+            padding: 10px;
+            font-size: 14px;
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
@@ -540,6 +707,10 @@
 
             .message-bubble {
                 max-width: 80%;
+            }
+
+            .modal-content {
+                max-width: 90%;
             }
         }
 
@@ -576,6 +747,9 @@
                 this.allUsers = [];
                 this.chats = new Map();
                 this.showProfileMenu = false;
+                this.showUserProfile = false;
+                this.selectedUserProfile = null;
+                this.activeTab = 'chats';
                 this.searchQuery = '';
                 this.init();
             }
@@ -831,6 +1005,9 @@
                     u.username.toLowerCase().includes(this.searchQuery.toLowerCase())
                 );
 
+                const activeChats = this.getActiveChats();
+                const activeTab = this.activeTab || 'chats';
+
                 return `
                     <div class="main-app">
                         <div class="sidebar">
@@ -841,21 +1018,18 @@
                                 </div>
                             </div>
                             ${!isConnected ? '<div class="connection-status">⚠️ Нет подключения</div>' : '<div class="connection-status connected">✓ Подключено</div>'}
-                            <div class="search-container">
-                                <input type="text" class="search-box" id="search-input" placeholder="Поиск пользователей...">
+                            
+                            <div class="tabs">
+                                <button class="tab ${activeTab === 'chats' ? 'active' : ''}" data-tab="chats">Переписки</button>
+                                <button class="tab ${activeTab === 'contacts' ? 'active' : ''}" data-tab="contacts">Контакты</button>
                             </div>
-                            <div class="user-list">
-                                ${filteredUsers.map(user => `
-                                    <div class="user-item ${this.selectedUserId === user.id ? 'active' : ''}" data-user-id="${user.id}">
-                                        <div class="user-info">
-                                            <div class="user-name">${user.username}</div>
-                                            <div class="user-status ${user.status}">
-                                                <span class="status-dot ${user.status}"></span>
-                                                ${user.status === 'online' ? 'Онлайн' : 'Оффлайн'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                `).join('')}
+
+                            <div class="search-container">
+                                <input type="text" class="search-box" id="search-input" placeholder="${activeTab === 'chats' ? 'Поиск чатов...' : 'Поиск контактов...'}">
+                            </div>
+                            
+                            <div class="user-list" id="list-container">
+                                ${activeTab === 'chats' ? this.renderChatsList(activeChats) : this.renderContactsList(filteredUsers)}
                             </div>
                         </div>
 
@@ -865,7 +1039,63 @@
                     </div>
 
                     ${this.showProfileMenu ? this.renderProfileMenu() : ''}
+                    ${this.showUserProfile ? this.renderUserProfileModal() : ''}
                 `;
+            }
+
+            getActiveChats() {
+                const chats = [];
+                this.chats.forEach((messages, chatKey) => {
+                    if (messages.length > 0) {
+                        const [id1, id2] = chatKey.split('-');
+                        const userId = id1 === this.currentUser.id.toString() ? parseInt(id2) : parseInt(id1);
+                        const user = this.allUsers.find(u => u.id === userId);
+                        if (user) {
+                            const lastMsg = messages[messages.length - 1];
+                            chats.push({
+                                userId,
+                                user,
+                                lastMessage: lastMsg,
+                                chatKey
+                            });
+                        }
+                    }
+                });
+                return chats.sort((a, b) => 
+                    new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp)
+                );
+            }
+
+            renderChatsList(chats) {
+                if (chats.length === 0) {
+                    return '<div style="padding: 24px; text-align: center; color: var(--text-secondary);">📭 Нет переписок</div>';
+                }
+                return chats.map(chat => `
+                    <div class="chat-item ${this.selectedUserId === chat.userId ? 'active' : ''}" data-user-id="${chat.userId}">
+                        <div class="chat-item-header">
+                            <span class="chat-item-name">${chat.user.username}</span>
+                            <span class="chat-item-time">${this.formatTime(chat.lastMessage.timestamp)}</span>
+                        </div>
+                        <div class="chat-item-message">${this.escapeHtml(chat.lastMessage.text)}</div>
+                    </div>
+                `).join('');
+            }
+
+            renderContactsList(users) {
+                if (users.length === 0) {
+                    return '<div style="padding: 24px; text-align: center; color: var(--text-secondary);">👤 Нет контактов</div>';
+                }
+                return users.map(user => `
+                    <div class="user-item ${this.selectedUserId === user.id ? 'active' : ''}" data-user-id="${user.id}">
+                        <div class="user-info">
+                            <div class="user-name">${user.username}</div>
+                            <div class="user-status ${user.status}">
+                                <span class="status-dot ${user.status}"></span>
+                                ${user.status === 'online' ? 'Онлайн' : 'Оффлайн'}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
             }
 
             renderChat() {
@@ -920,11 +1150,77 @@
             renderProfileMenu() {
                 return `
                     <div class="profile-menu">
-                        <div class="profile-menu-item">👤 ${this.currentUser.username}</div>
+                        <div class="profile-menu-item" id="view-own-profile">👤 ${this.currentUser.username}</div>
                         <div class="profile-menu-item">${this.currentUser.email}</div>
                         <div class="profile-menu-item logout" id="logout-btn">Выход</div>
                     </div>
                 `;
+            }
+
+            renderUserProfileModal() {
+                const user = this.selectedUserProfile;
+                if (!user) return '';
+
+                return `
+                    <div class="modal show" id="user-profile-modal">
+                        <div class="modal-content">
+                            <button class="modal-close" id="close-profile">✕</button>
+                            <div class="profile-header">
+                                <div class="profile-avatar">${user.username[0].toUpperCase()}</div>
+                                <div class="profile-name">${user.username}</div>
+                                <div class="user-status ${user.status}">
+                                    <span class="status-dot ${user.status}"></span>
+                                    ${user.status === 'online' ? 'Онлайн сейчас' : 'Оффлайн'}
+                                </div>
+                            </div>
+                            <div class="profile-info">
+                                <div class="profile-row">
+                                    <div class="profile-label">Email</div>
+                                    <div class="profile-value">${user.email}</div>
+                                </div>
+                                <div class="profile-row">
+                                    <div class="profile-label">Статус</div>
+                                    <div class="profile-value">${user.status === 'online' ? '🟢 Онлайн' : '⚫ Оффлайн'}</div>
+                                </div>
+                                <div class="profile-row">
+                                    <div class="profile-label">В сети с</div>
+                                    <div class="profile-value">${new Date(user.createdAt).toLocaleDateString('ru-RU')}</div>
+                                </div>
+                            </div>
+                            <div class="profile-actions">
+                                <button class="btn btn-primary" id="start-chat-btn">💬 Написать</button>
+                                <button class="btn btn-secondary" id="close-profile-btn">Закрыть</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            formatTime(timestamp) {
+                const date = new Date(timestamp);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+
+                if (diffMins < 1) return 'Сейчас';
+                if (diffMins < 60) return `${diffMins} мин`;
+                if (diffHours < 24) return `${diffHours}ч`;
+                if (diffDays < 7) return `${diffDays}д`;
+                
+                return date.toLocaleDateString('ru-RU', { month: 'short', day: 'numeric' });
+            }
+
+            async loadUserProfile(userId) {
+                try {
+                    const res = await fetch(`${API_URL}/api/profile/${userId}`);
+                    this.selectedUserProfile = await res.json();
+                    this.showUserProfile = true;
+                    this.render();
+                } catch (err) {
+                    console.error('Error loading profile:', err);
+                }
             }
 
             escapeHtml(text) {
@@ -975,11 +1271,33 @@
             }
 
             attachMainListeners() {
-                // User selection
-                document.querySelectorAll('.user-item').forEach(item => {
+                // Tab switching
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        this.activeTab = tab.dataset.tab;
+                        this.render();
+                    });
+                });
+
+                // User/Chat selection
+                document.querySelectorAll('.user-item, .chat-item').forEach(item => {
                     item.addEventListener('click', () => {
                         const userId = parseInt(item.dataset.userId);
                         this.startChat(userId);
+                    });
+                });
+
+                // User profile on long click (right click)
+                document.querySelectorAll('.user-item, .chat-item').forEach(item => {
+                    item.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        const userId = parseInt(item.dataset.userId);
+                        this.loadUserProfile(userId);
+                    });
+
+                    item.addEventListener('dblclick', () => {
+                        const userId = parseInt(item.dataset.userId);
+                        this.loadUserProfile(userId);
                     });
                 });
 
@@ -1023,6 +1341,55 @@
                 const logoutBtn = document.getElementById('logout-btn');
                 if (logoutBtn) {
                     logoutBtn.addEventListener('click', () => this.logout());
+                }
+
+                const viewOwnProfile = document.getElementById('view-own-profile');
+                if (viewOwnProfile) {
+                    viewOwnProfile.addEventListener('click', () => {
+                        this.showProfileMenu = false;
+                        this.selectedUserProfile = this.currentUser;
+                        this.showUserProfile = true;
+                        this.render();
+                    });
+                }
+
+                // Profile modal
+                const closeProfileBtn = document.getElementById('close-profile');
+                const closeProfileBtn2 = document.getElementById('close-profile-btn');
+                const startChatBtn = document.getElementById('start-chat-btn');
+
+                if (closeProfileBtn) {
+                    closeProfileBtn.addEventListener('click', () => {
+                        this.showUserProfile = false;
+                        this.render();
+                    });
+                }
+
+                if (closeProfileBtn2) {
+                    closeProfileBtn2.addEventListener('click', () => {
+                        this.showUserProfile = false;
+                        this.render();
+                    });
+                }
+
+                if (startChatBtn) {
+                    startChatBtn.addEventListener('click', () => {
+                        this.startChat(this.selectedUserProfile.id);
+                        this.showUserProfile = false;
+                        this.activeTab = 'chats';
+                        this.render();
+                    });
+                }
+
+                // Close modal on background click
+                const modal = document.getElementById('user-profile-modal');
+                if (modal) {
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) {
+                            this.showUserProfile = false;
+                            this.render();
+                        }
+                    });
                 }
 
                 // Auto scroll
