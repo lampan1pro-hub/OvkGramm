@@ -14,7 +14,8 @@ app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
 // ---------- Хранилище ----------
-const DIR = path.join(__dirname, 'data');
+// Папку с данными можно вынести на постоянный диск хостинга: DATA_DIR=/путь/к/диску
+const DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
 const UP = path.join(DIR, 'uploads');
 fs.mkdirSync(UP, { recursive: true });
 const F = {
@@ -22,8 +23,44 @@ const F = {
     messages: path.join(DIR, 'messages.json'),
     chats: path.join(DIR, 'chats.json')
 };
-const read = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return []; } };
-const write = (f, d) => fs.writeFileSync(f, JSON.stringify(d, null, 2));
+
+// Чтение. Если файл повреждён — берём резервную копию (.bak).
+// Раньше при любой ошибке возвращался пустой список, и следующая запись стирала ВСЕХ пользователей.
+function read(f) {
+    const found = [f, f + '.bak'].filter(p => fs.existsSync(p));
+    for (const p of found) {
+        try {
+            const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+            if (p !== f) {
+                console.error(`⚠️ ${path.basename(f)} повреждён или потерян — восстановлен из резервной копии`);
+                if (fs.existsSync(f)) fs.copyFileSync(f, `${f}.corrupt-${Date.now()}`);
+                fs.copyFileSync(p, f);
+            }
+            return d;
+        } catch {}
+    }
+    if (fs.existsSync(f)) { // нечитаемый файл откладываем в сторону, ничего не удаляя
+        fs.renameSync(f, `${f}.corrupt-${Date.now()}`);
+        console.error(`⚠️ ${path.basename(f)} нечитаем, сохранён как .corrupt-*`);
+    }
+    return [];
+}
+
+// Запись: во временный файл, fsync, затем атомарное переименование.
+// Если сервер остановят посреди записи, основной файл останется целым.
+const lastBak = {};
+function write(f, d) {
+    const tmp = f + '.tmp';
+    const fd = fs.openSync(tmp, 'w');
+    fs.writeSync(fd, JSON.stringify(d, null, 2));
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    if (fs.existsSync(f) && Date.now() - (lastBak[f] || 0) > 60000) { // резервная копия не чаще раза в минуту
+        fs.copyFileSync(f, f + '.bak');
+        lastBak[f] = Date.now();
+    }
+    fs.renameSync(tmp, f);
+}
 
 // Отдаём только страницу и загруженные файлы (но не папку data целиком)
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
@@ -78,6 +115,18 @@ const checkPass = (p, stored) => isHash(stored) ? hashPass(p, stored.split(':')[
     write(F.messages, msgs);
     write(F.chats, chats);
 })();
+
+// Метка «когда создана база». Если после каждого перезапуска она новая — хостинг стирает файлы.
+let meta;
+try { meta = JSON.parse(fs.readFileSync(path.join(DIR, 'meta.json'), 'utf8')); }
+catch {
+    meta = { createdAt: new Date().toISOString() };
+    fs.writeFileSync(path.join(DIR, 'meta.json'), JSON.stringify(meta));
+}
+console.log(`💾 Папка данных: ${DIR}`);
+console.log(`👤 Пользователей: ${read(F.users).length}, база создана: ${meta.createdAt}`);
+
+app.get('/api/health', (req, res) => res.json({ ok: true, users: read(F.users).length, dbCreatedAt: meta.createdAt }));
 
 // ---------- Онлайн ----------
 const sockets = new Map(); // userId -> Set<ws>
@@ -168,7 +217,7 @@ app.post('/api/login', (req, res) => {
     const login = String(req.body.email || '').trim().toLowerCase().replace(/^@/, '');
     const password = String(req.body.password || '');
     const users = read(F.users);
-    const user = users.find(u => (u.email === login || u.handle === login) && checkPass(password, u.password));
+    const user = users.find(u => ((u.email || '').toLowerCase() === login || u.handle === login) && checkPass(password, u.password));
     if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
     if (!isHash(user.password)) { user.password = hashPass(password); write(F.users, users); }
     res.json({ success: true, user: self(user) });
@@ -186,7 +235,7 @@ app.get('/api/users/search', (req, res) => {
 app.get('/api/profile/:id', (req, res) => {
     const u = read(F.users).find(x => x.id === Number(req.params.id));
     if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
-    res.json(self(u));
+    res.json(pub(u));
 });
 
 app.put('/api/profile/:id', (req, res) => {
@@ -321,6 +370,9 @@ app.get('/api/messages/:chatId', (req, res) => {
 // ---------- WebSocket ----------
 wss.on('connection', ws => {
     let uid = null;
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+    ws.on('error', () => {}); // ошибка одного клиента не должна ронять сервер
 
     ws.on('message', raw => {
         try {
@@ -391,6 +443,16 @@ app.use((err, req, res, next) => {
     const big = err.type === 'entity.too.large';
     res.status(big ? 413 : err.status || 500).json({ error: big ? 'Файл слишком большой (максимум 50 МБ)' : 'Ошибка сервера' });
 });
+
+// Пинг раз в 25 секунд: хостинги закрывают «молчащие» соединения, а мёртвые мы убираем из «в сети»
+setInterval(() => wss.clients.forEach(ws => {
+    if (!ws.isAlive) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+}), 25000);
+
+process.on('uncaughtException', e => console.error('Необработанная ошибка:', e));
+process.on('unhandledRejection', e => console.error('Необработанный промис:', e));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`🚀 OVKGRAMM запущен: http://localhost:${PORT}`));
