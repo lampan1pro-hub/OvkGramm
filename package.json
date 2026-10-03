@@ -1,18 +1,22 @@
 {
-  "name": "ovkgramm",
-  "version": "1.0.0",
-  "description": "Реальный мессенджер OVKGRAMM",
-  "main": "server.js",
+  "name": "saimongram",
+  "version": "2.0.0",
+  "description": "Social messenger with NFT system and Supabase",
+  "main": "server-supabase.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node server-supabase.js",
+    "dev": "node server-supabase.js"
   },
-  "keywords": ["messenger", "chat", "websocket"],
-  "author": "OVKGRAMM",
+  "keywords": ["messenger", "supabase", "nft"],
+  "author": "You",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
     "ws": "^8.13.0",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "@supabase/supabase-js": "^2.38.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }
