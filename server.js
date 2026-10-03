@@ -12,12 +12,11 @@ const wss = new WebSocket.Server({ server });
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
-// Раздаём только страницу, а не всю папку: раньше data/users.json был доступен по ссылке
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // ---------- Хранилище ----------
 const DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(DIR)) fs.mkdirSync(DIR);
+const UP = path.join(DIR, 'uploads');
+fs.mkdirSync(UP, { recursive: true });
 const F = {
     users: path.join(DIR, 'users.json'),
     messages: path.join(DIR, 'messages.json'),
@@ -26,22 +25,39 @@ const F = {
 const read = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return []; } };
 const write = (f, d) => fs.writeFileSync(f, JSON.stringify(d, null, 2));
 
+// Отдаём только страницу и загруженные файлы (но не папку data целиком)
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.use('/uploads', express.static(UP, {
+    maxAge: '30d', immutable: true,
+    setHeaders: r => r.setHeader('X-Content-Type-Options', 'nosniff')
+}));
+
 const directId = (a, b) => `d_${Math.min(a, b)}_${Math.max(a, b)}`;
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
-// Пароли: scrypt. Старые пароли (открытым текстом) принимаются и сразу заменяются на хэш
+// Файлы
+const MIME = {
+    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov'
+};
+const URL_RE = /^\/uploads\/[\w-]+\.(jpg|png|webp|gif|mp4|webm|mov)$/;
+const fileOk = u => typeof u === 'string' && URL_RE.test(u) && fs.existsSync(path.join(UP, path.basename(u)));
+const kindOf = u => /\.(mp4|webm|mov)$/.test(u) ? 'video' : 'image';
+const imageOk = u => fileOk(u) && kindOf(u) === 'image';
+
+// Пароли: scrypt. Старые (открытым текстом) принимаются и сразу заменяются на хэш
 const hashPass = (p, salt = crypto.randomBytes(8).toString('hex')) =>
     `${salt}:${crypto.scryptSync(p, salt, 32).toString('hex')}`;
 const isHash = s => /^[0-9a-f]{16}:[0-9a-f]{64}$/.test(s);
 const checkPass = (p, stored) => isHash(stored) ? hashPass(p, stored.split(':')[0]) === stored : p === stored;
 
-// Миграция старых данных: юзернеймы, единый формат чатов и сообщений
+// Миграция старых данных
 (function migrate() {
     const users = read(F.users);
     users.forEach(u => { if (!u.handle) u.handle = 'user' + String(u.id).slice(-6); });
     write(F.users, users);
 
-    let chats = read(F.chats).map(c => c.type ? c :
+    const chats = read(F.chats).map(c => c.type ? c :
         { id: directId(...c.participants), type: 'direct', members: c.participants, createdAt: c.createdAt });
     const msgs = read(F.messages);
     msgs.forEach(m => {
@@ -52,6 +68,13 @@ const checkPass = (p, stored) => isHash(stored) ? hashPass(p, stored.split(':')[
                 chats.push({ id: m.chatId, type: 'direct', members: [a, b], createdAt: m.timestamp });
         }
     });
+    // Всё, что было до обновления, считаем прочитанным
+    chats.forEach(c => {
+        if (c.reads) return;
+        const last = msgs.filter(m => m.chatId === c.id).pop();
+        c.reads = {};
+        c.members.forEach(id => { c.reads[id] = last ? last.timestamp : ''; });
+    });
     write(F.messages, msgs);
     write(F.chats, chats);
 })();
@@ -61,7 +84,7 @@ const sockets = new Map(); // userId -> Set<ws>
 
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, bio: u.bio || '',
-    createdAt: u.createdAt, online: sockets.has(u.id)
+    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id)
 });
 const self = u => ({ ...pub(u), email: u.email });
 
@@ -76,12 +99,16 @@ function broadcast(payload) {
     wss.clients.forEach(s => s.readyState === WebSocket.OPEN && s.send(json));
 }
 
-// Чат в виде, удобном клиенту
-function shape(chat, me, users, msgs) {
+// Чат в виде, удобном клиенту. list — сообщения этого чата
+function shape(chat, me, users, list) {
     const byId = id => users.find(u => u.id === id);
-    let last = null;
-    for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].chatId === chat.id) { last = msgs[i]; break; }
-    const o = { id: chat.id, type: chat.type, name: chat.name, creator: chat.creator, createdAt: chat.createdAt, last };
+    const reads = chat.reads || {};
+    const o = {
+        id: chat.id, type: chat.type, name: chat.name, avatar: chat.avatar || '',
+        creator: chat.creator, createdAt: chat.createdAt, reads,
+        last: list[list.length - 1] || null,
+        unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length
+    };
     if (chat.type === 'direct') {
         const p = byId(chat.members.find(i => i !== me));
         o.peer = p ? pub(p) : null;
@@ -90,6 +117,27 @@ function shape(chat, me, users, msgs) {
     }
     return o;
 }
+const one = (chat, me) => shape(chat, me, read(F.users), read(F.messages).filter(m => m.chatId === chat.id));
+
+// ---------- Загрузка файлов ----------
+app.post('/api/upload', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
+    const uid = Number(req.query.userId);
+    if (!read(F.users).some(u => u.id === uid)) return res.status(401).json({ error: 'Войдите в аккаунт' });
+
+    const ext = MIME[String(req.headers['content-type'] || '').split(';')[0].trim()];
+    if (!ext) return res.status(400).json({ error: 'Поддерживаются фото (JPG, PNG, WebP, GIF) и видео (MP4, WebM, MOV)' });
+
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: 'Пустой файл' });
+
+    const isImg = !['mp4', 'webm', 'mov'].includes(ext);
+    if (req.query.kind === 'avatar' && (!isImg || buf.length > 5 * 1024 * 1024))
+        return res.status(400).json({ error: 'Для аватарки нужно фото до 5 МБ' });
+
+    const name = crypto.randomUUID() + '.' + ext;
+    await fs.promises.writeFile(path.join(UP, name), buf);
+    res.json({ url: '/uploads/' + name, kind: isImg ? 'image' : 'video' });
+});
 
 // ---------- Авторизация ----------
 app.post('/api/register', (req, res) => {
@@ -109,7 +157,7 @@ app.post('/api/register', (req, res) => {
 
     const user = {
         id: Date.now(), username, handle, email, password: hashPass(password),
-        bio: '', createdAt: new Date().toISOString()
+        bio: '', avatar: '', createdAt: new Date().toISOString()
     };
     users.push(user);
     write(F.users, users);
@@ -127,7 +175,6 @@ app.post('/api/login', (req, res) => {
 });
 
 // ---------- Пользователи ----------
-// Поиск по имени и @юзернейму; пустой запрос — первые 30 человек
 app.get('/api/users/search', (req, res) => {
     const s = String(req.query.q || '').toLowerCase().replace(/^@/, '');
     const me = Number(req.query.userId);
@@ -139,7 +186,7 @@ app.get('/api/users/search', (req, res) => {
 app.get('/api/profile/:id', (req, res) => {
     const u = read(F.users).find(x => x.id === Number(req.params.id));
     if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
-    res.json(pub(u));
+    res.json(self(u));
 });
 
 app.put('/api/profile/:id', (req, res) => {
@@ -147,7 +194,7 @@ app.put('/api/profile/:id', (req, res) => {
     const u = users.find(x => x.id === Number(req.params.id));
     if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
 
-    const { username, handle, bio } = req.body;
+    const { username, handle, bio, avatar } = req.body;
     if (username !== undefined) {
         const n = String(username).trim().slice(0, 40);
         if (!n) return res.status(400).json({ error: 'Имя не может быть пустым' });
@@ -160,9 +207,13 @@ app.put('/api/profile/:id', (req, res) => {
         u.handle = h;
     }
     if (bio !== undefined) u.bio = String(bio).slice(0, 200);
+    if (avatar !== undefined) {
+        if (avatar !== '' && !imageOk(avatar)) return res.status(400).json({ error: 'Некорректное фото' });
+        u.avatar = avatar;
+    }
 
     write(F.users, users);
-    broadcast({ type: 'chat' }); // у всех обновятся имена в списках
+    broadcast({ type: 'chat' }); // у всех обновятся имена и аватарки
     res.json({ success: true, user: self(u) });
 });
 
@@ -170,11 +221,15 @@ app.put('/api/profile/:id', (req, res) => {
 app.get('/api/chats/:userId', (req, res) => {
     const me = Number(req.params.userId);
     const users = read(F.users);
-    const msgs = read(F.messages);
+    const grouped = new Map();
+    read(F.messages).forEach(m => {
+        if (!grouped.has(m.chatId)) grouped.set(m.chatId, []);
+        grouped.get(m.chatId).push(m);
+    });
     const ts = c => new Date(c.last ? c.last.timestamp : c.createdAt || 0).getTime();
     res.json(read(F.chats)
         .filter(c => c.members.includes(me))
-        .map(c => shape(c, me, users, msgs))
+        .map(c => shape(c, me, users, grouped.get(c.id) || []))
         .sort((a, b) => ts(b) - ts(a)));
 });
 
@@ -187,11 +242,11 @@ app.post('/api/chats', (req, res) => {
     const chats = read(F.chats);
     let chat = chats.find(c => c.id === directId(me, peer));
     if (!chat) {
-        chat = { id: directId(me, peer), type: 'direct', members: [me, peer], createdAt: new Date().toISOString() };
+        chat = { id: directId(me, peer), type: 'direct', members: [me, peer], reads: {}, createdAt: new Date().toISOString() };
         chats.push(chat);
         write(F.chats, chats);
     }
-    res.json(shape(chat, me, users, read(F.messages)));
+    res.json(one(chat, me));
 });
 
 app.post('/api/groups', (req, res) => {
@@ -204,13 +259,56 @@ app.post('/api/groups', (req, res) => {
 
     const chats = read(F.chats);
     const group = {
-        id: 'g_' + Date.now(), type: 'group', name, creator: me,
-        members: [me, ...others], createdAt: new Date().toISOString()
+        id: 'g_' + Date.now(), type: 'group', name, avatar: '', creator: me,
+        members: [me, ...others], reads: {}, createdAt: new Date().toISOString()
     };
     chats.push(group);
     write(F.chats, chats);
     sendTo(others, { type: 'chat' });
-    res.json(shape(group, me, users, []));
+    res.json(one(group, me));
+});
+
+// Название и фото группы — может менять любой участник
+app.put('/api/groups/:id', (req, res) => {
+    const me = Number(req.body.userId);
+    const chats = read(F.chats);
+    const g = chats.find(c => c.id === req.params.id && c.type === 'group');
+    if (!g || !g.members.includes(me)) return res.status(403).json({ error: 'Нет доступа' });
+
+    if (req.body.name !== undefined) {
+        const n = String(req.body.name).trim().slice(0, 40);
+        if (!n) return res.status(400).json({ error: 'Название не может быть пустым' });
+        g.name = n;
+    }
+    if (req.body.avatar !== undefined) {
+        if (req.body.avatar !== '' && !imageOk(req.body.avatar)) return res.status(400).json({ error: 'Некорректное фото' });
+        g.avatar = req.body.avatar;
+    }
+    write(F.chats, chats);
+    sendTo(g.members, { type: 'chat' });
+    res.json(one(g, me));
+});
+
+// Добавить участников в существующую группу
+app.post('/api/groups/:id/members', (req, res) => {
+    const me = Number(req.body.userId);
+    const chats = read(F.chats);
+    const g = chats.find(c => c.id === req.params.id && c.type === 'group');
+    if (!g || !g.members.includes(me)) return res.status(403).json({ error: 'Нет доступа' });
+
+    const users = read(F.users);
+    const add = [...new Set((req.body.members || []).map(Number))]
+        .filter(id => !g.members.includes(id) && users.some(u => u.id === id));
+    if (!add.length) return res.status(400).json({ error: 'Выберите новых участников' });
+
+    // Новые участники видят историю, но она не считается для них непрочитанной
+    const last = read(F.messages).filter(m => m.chatId === g.id).pop();
+    g.reads = g.reads || {};
+    add.forEach(id => { g.reads[id] = last ? last.timestamp : ''; });
+    g.members.push(...add);
+    write(F.chats, chats);
+    sendTo(g.members, { type: 'chat' });
+    res.json(one(g, me));
 });
 
 app.get('/api/messages/:chatId', (req, res) => {
@@ -237,20 +335,39 @@ wss.on('connection', ws => {
             }
             if (!uid) return;
 
-            const chat = read(F.chats).find(c => String(c.id) === String(m.chatId));
+            const chats = read(F.chats);
+            const chat = chats.find(c => String(c.id) === String(m.chatId));
             if (!chat || !chat.members.includes(uid)) return;
 
             if (m.type === 'message') {
                 const text = String(m.text || '').trim().slice(0, 4000);
-                if (!text) return;
+                let media;
+                if (m.media && fileOk(m.media.url)) {
+                    media = { kind: kindOf(m.media.url), url: m.media.url };
+                    const w = Number(m.media.w), h = Number(m.media.h);
+                    if (w > 0 && h > 0 && w < 20000 && h < 20000) { media.w = Math.round(w); media.h = Math.round(h); }
+                }
+                if (!text && !media) return;
+
                 const msg = {
-                    id: crypto.randomUUID(), chatId: chat.id, senderId: uid,
-                    text, timestamp: new Date().toISOString()
+                    id: crypto.randomUUID(), chatId: chat.id, senderId: uid, text,
+                    ...(media && { media }), timestamp: new Date().toISOString()
                 };
                 const msgs = read(F.messages);
                 msgs.push(msg);
                 write(F.messages, msgs);
                 sendTo(chat.members, { type: 'message', data: msg }); // только участникам чата
+
+            } else if (m.type === 'read') {
+                // Помечаем прочитанным всё до последнего сообщения включительно
+                const last = read(F.messages).filter(x => x.chatId === chat.id).pop();
+                const at = last ? last.timestamp : '';
+                chat.reads = chat.reads || {};
+                if (!at || (chat.reads[uid] || '') >= at) return;
+                chat.reads[uid] = at;
+                write(F.chats, chats);
+                sendTo(chat.members, { type: 'read', data: { chatId: chat.id, userId: uid, at } });
+
             } else if (m.type === 'typing') {
                 sendTo(chat.members, { type: 'typing', data: { chatId: chat.id, userId: uid } }, ws);
             }
@@ -269,7 +386,11 @@ wss.on('connection', ws => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`🚀 OVKGRAMM запущен: http://localhost:${PORT}`);
+// Ошибки в JSON, чтобы клиент мог показать понятный текст
+app.use((err, req, res, next) => {
+    const big = err.type === 'entity.too.large';
+    res.status(big ? 413 : err.status || 500).json({ error: big ? 'Файл слишком большой (максимум 50 МБ)' : 'Ошибка сервера' });
 });
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`🚀 OVKGRAMM запущен: http://localhost:${PORT}`));
