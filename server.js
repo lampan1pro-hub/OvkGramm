@@ -151,6 +151,45 @@ app.get('/api/users', (req, res) => {
     })));
 });
 
+// Search users by username
+app.get('/api/users/search/:query', (req, res) => {
+    const { query } = req.params;
+    const users = readUsers();
+    const onlineUsers = Array.from(connectedUsers.values());
+    
+    const results = users.filter(u => 
+        u.username.toLowerCase().includes(query.toLowerCase())
+    ).map(u => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        status: onlineUsers.some(ou => ou.userId === u.id) ? 'online' : 'offline'
+    }));
+    
+    res.json(results);
+});
+
+// Get user profile
+app.get('/api/profile/:userId', (req, res) => {
+    const { userId } = req.params;
+    const users = readUsers();
+    const onlineUsers = Array.from(connectedUsers.values());
+    
+    const user = users.find(u => u.id === parseInt(userId));
+    
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.createdAt,
+        status: onlineUsers.some(ou => ou.userId === user.id) ? 'online' : 'offline'
+    });
+});
+
 // Get chats for user
 app.get('/api/chats/:userId', (req, res) => {
     const { userId } = req.params;
