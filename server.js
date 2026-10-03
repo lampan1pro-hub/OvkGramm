@@ -101,6 +101,8 @@ app.post('/api/register', (req, res) => {
         username,
         email,
         password, // In production, hash this!
+        bio: '',
+        avatar: '',
         createdAt: new Date().toISOString()
     };
 
@@ -112,7 +114,9 @@ app.post('/api/register', (req, res) => {
         user: { 
             id: newUser.id, 
             username: newUser.username, 
-            email: newUser.email 
+            email: newUser.email,
+            bio: newUser.bio,
+            avatar: newUser.avatar
         } 
     });
 });
@@ -133,7 +137,9 @@ app.post('/api/login', (req, res) => {
         user: { 
             id: user.id, 
             username: user.username, 
-            email: user.email 
+            email: user.email,
+            bio: user.bio || '',
+            avatar: user.avatar || ''
         } 
     });
 });
@@ -147,6 +153,8 @@ app.get('/api/users', (req, res) => {
         id: u.id,
         username: u.username,
         email: u.email,
+        bio: u.bio || '',
+        avatar: u.avatar || '',
         status: onlineUsers.some(ou => ou.userId === u.id) ? 'online' : 'offline'
     })));
 });
@@ -163,6 +171,8 @@ app.get('/api/users/search/:query', (req, res) => {
         id: u.id,
         username: u.username,
         email: u.email,
+        bio: u.bio || '',
+        avatar: u.avatar || '',
         status: onlineUsers.some(ou => ou.userId === u.id) ? 'online' : 'offline'
     }));
     
@@ -185,9 +195,79 @@ app.get('/api/profile/:userId', (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
+        bio: user.bio || '',
+        avatar: user.avatar || '',
         createdAt: user.createdAt,
         status: onlineUsers.some(ou => ou.userId === user.id) ? 'online' : 'offline'
     });
+});
+
+// Update user profile
+app.put('/api/profile/:userId', (req, res) => {
+    const { userId } = req.params;
+    const { username, bio, avatar } = req.body;
+    const users = readUsers();
+    
+    const user = users.find(u => u.id === parseInt(userId));
+    
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (username) user.username = username;
+    if (bio !== undefined) user.bio = bio;
+    if (avatar !== undefined) user.avatar = avatar;
+    
+    writeUsers(users);
+    
+    res.json({
+        success: true,
+        user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            bio: user.bio || '',
+            avatar: user.avatar || ''
+        }
+    });
+});
+
+// Create group chat
+app.post('/api/groups', (req, res) => {
+    const { userId, groupName, members } = req.body;
+    
+    if (!groupName || !Array.isArray(members)) {
+        return res.status(400).json({ error: 'Group name and members required' });
+    }
+    
+    const chats = readChats();
+    const users = readUsers();
+    
+    const newGroup = {
+        id: Date.now(),
+        type: 'group',
+        name: groupName,
+        creator: userId,
+        members: [userId, ...members],
+        createdAt: new Date().toISOString()
+    };
+    
+    chats.push(newGroup);
+    writeChats(chats);
+    
+    res.json({ success: true, group: newGroup });
+});
+
+// Get groups for user
+app.get('/api/groups/:userId', (req, res) => {
+    const { userId } = req.params;
+    const chats = readChats();
+    
+    const groups = chats.filter(c => 
+        c.type === 'group' && c.members.includes(parseInt(userId))
+    );
+    
+    res.json(groups);
 });
 
 // Get chats for user
