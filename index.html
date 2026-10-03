@@ -10,6 +10,7 @@
 html,body{height:100%}
 body{font:15px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:var(--t);background:var(--bg);overflow:hidden}
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+button:disabled{opacity:.5;cursor:default}
 input,textarea{font:inherit;color:inherit}
 [hidden]{display:none!important}
 .f{margin-bottom:12px}
@@ -17,12 +18,13 @@ input,textarea{font:inherit;color:inherit}
 .f input,.f textarea{width:100%;padding:10px 12px;border:1px solid var(--b);border-radius:8px;font-size:16px}
 .f input:focus,.f textarea:focus{outline:0;border-color:var(--p);background:var(--pl)}
 .btn{width:100%;padding:11px;border-radius:8px;font-weight:600;background:var(--p);color:#fff}
-.btn:hover{background:var(--pd)}
+.btn:hover:not(:disabled){background:var(--pd)}
 .btn.g{background:var(--bg);color:var(--p)}
 .btn.r{background:#fdecea;color:#d33}
 .row{display:flex;gap:8px;margin-top:12px}
 .row .btn{flex:1}
 .err{color:#d33;font-size:13px;min-height:18px;margin:4px 0}
+.lnk{color:var(--p);font-weight:600;padding:6px 10px}
 /* вход */
 #auth{height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;background:linear-gradient(135deg,#0084ff,#0066cc)}
 .card{background:#fff;border-radius:16px;padding:28px;width:100%;max-width:400px;max-height:92dvh;overflow:auto}
@@ -48,7 +50,8 @@ input,textarea{font:inherit;color:inherit}
 .sec{padding:10px 14px 4px;font-size:13px;color:var(--t2);font-weight:600}
 .av{position:relative;width:48px;height:48px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;color:#fff;font-weight:600;font-size:18px}
 .av.s{width:40px;height:40px;font-size:16px}
-.av.l{width:88px;height:88px;font-size:36px;margin:0 auto}
+.av.l{width:96px;height:96px;font-size:38px;margin:0 auto}
+.av img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
 .av i{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;background:var(--on);border:2px solid #fff}
 .im{flex:1;min-width:0}
 .r1,.lm{display:flex;justify-content:space-between;gap:8px}
@@ -57,6 +60,9 @@ input,textarea{font:inherit;color:inherit}
 .lm{color:var(--t2);font-size:14px}
 .lm span:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .bd{background:var(--p);color:#fff;border-radius:10px;min-width:20px;padding:0 6px;font-size:12px;line-height:20px;text-align:center}
+.tk{font-size:12px;letter-spacing:-2px}
+.tm .tk{margin-right:5px}
+.tm .tk.rd{color:var(--p)}
 /* чат */
 #chat{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
 #empty{margin:auto;text-align:center;color:var(--t2);padding:20px}
@@ -71,14 +77,29 @@ input,textarea{font:inherit;color:inherit}
 .m{max-width:min(70%,520px);padding:7px 11px;border-radius:18px 18px 18px 4px;background:#fff;overflow-wrap:anywhere;white-space:pre-wrap;align-self:flex-start}
 .m.me{align-self:flex-end;background:var(--p);color:#fff;border-radius:18px 18px 4px 18px}
 .m b{display:block;font-size:12px;color:var(--p)}
-.m time{font-size:11px;opacity:.65;margin-left:8px;float:right;margin-top:6px}
+.m time{font-size:11px;color:var(--t2);margin-left:8px;float:right;margin-top:6px}
+.m.me time{color:rgba(255,255,255,.75)}
+.m .tk{margin-left:5px}
+.m.me .tk.rd{color:#b6f0ff}
+.m video,.m img.ph{display:block;width:340px;max-width:100%;max-height:420px;border-radius:15px;object-fit:cover;background:#000;cursor:pointer}
+.m video{object-fit:contain;cursor:default}
+.m.mm{padding:3px;border-radius:18px}
+.m.mm b{padding:3px 8px 0}
+.m.mm .tx{display:block;padding:5px 8px 0}
+.m.mm time{display:block;float:none;text-align:right;padding:2px 8px 2px;margin:0}
+#pend{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff;border-top:1px solid var(--b)}
+#pend .th{width:48px;height:48px;border-radius:8px;object-fit:cover;background:#000;flex-shrink:0}
+#pend .st{flex:1;font-size:14px;color:var(--t2)}
 #form{display:flex;gap:8px;align-items:flex-end;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--b)}
+#pend:not([hidden])+#form{border-top:0}
 #inp{flex:1;resize:none;max-height:120px;padding:9px 14px;border:1px solid var(--b);border-radius:20px;font-size:16px;line-height:1.3;display:block}
 #inp:focus{outline:0;border-color:var(--p)}
 #send{width:40px;height:40px;border-radius:50%;background:var(--p);color:#fff;font-size:16px;flex-shrink:0}
 /* окна */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9}
 .modal h2{font-size:20px}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:20;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+#lb img{max-width:100%;max-height:100%;object-fit:contain}
 @media(max-width:768px){
 #side{width:100%}
 #chat{position:absolute;inset:0;transform:translateX(100%);transition:transform .2s;z-index:5}
@@ -124,7 +145,9 @@ input,textarea{font:inherit;color:inherit}
         <div id="hd"></div>
       </div>
       <div id="msgs"></div>
+      <div id="pend" hidden></div>
       <form id="form">
+        <button type="button" class="ib" id="attach" aria-label="Прикрепить фото или видео">📎</button>
         <textarea id="inp" rows="1" placeholder="Сообщение" enterkeyhint="send"></textarea>
         <button id="send" aria-label="Отправить">➤</button>
       </form>
@@ -133,12 +156,15 @@ input,textarea{font:inherit;color:inherit}
 </div>
 
 <div class="modal" id="modal" hidden><div class="card" id="card"></div></div>
+<div id="lb" hidden><img id="lbi" alt=""></div>
+<input type="file" id="file" hidden>
 
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let me = null, ws = null, cur = null, query = '', found = [];
-let chats = new Map(), msgs = new Map(), unread = new Map(), typing = new Map();
+let me = null, ws = null, cur = null, query = '', found = [], opened = false;
+let chats = new Map(), msgs = new Map(), typing = new Map(), pend = null;
+const msgsEl = $('#msgs');
 
 const api = async (url, method = 'GET', body) => {
   const r = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: body && JSON.stringify(body) });
@@ -150,9 +176,80 @@ const save = () => localStorage.setItem('ovk_user', JSON.stringify(me));
 const hm = t => new Date(t).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
 const lt = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? hm(t) : d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit'}); };
 const dl = t => new Date(t).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'});
-const av = (name, seed, cls = '', on) =>
-  `<div class="av ${cls}" style="background:hsl(${[...String(seed)].reduce((a, c) => a + c.charCodeAt(0) * 31, 0) % 360} 50% 48%)">${esc((name || '?')[0].toUpperCase())}${on ? '<i></i>' : ''}</div>`;
+
+/* ---------- Аватарки ---------- */
+const hue = s => [...String(s)].reduce((a, c) => a + c.charCodeAt(0) * 31, 0) % 360;
+const av = (name, seed, cls = '', on = false, img = '') =>
+  `<div class="av ${cls}" style="background:hsl(${hue(seed)} 50% 48%)">${img ? `<img src="${esc(img)}" alt="">` : esc((name || '?')[0].toUpperCase())}${on ? '<i></i>' : ''}</div>`;
+const uav = (u, cls = '', dot = false) => av(u.username, u.id, cls, dot && u.online, u.avatar);
+const cav = (c, cls = '') => c.type === 'group' ? av(c.name, c.id, cls, false, c.avatar) : c.peer ? uav(c.peer, cls, true) : av('?', c.id, cls);
 const title = c => c.type === 'group' ? c.name : (c.peer ? c.peer.username : 'Удалённый аккаунт');
+
+/* ---------- Файлы ---------- */
+const fileEl = $('#file');
+const pickFile = accept => new Promise(res => {
+  fileEl.accept = accept; fileEl.value = '';
+  fileEl.onchange = () => res(fileEl.files[0] || null);
+  fileEl.oncancel = () => res(null);
+  fileEl.click();
+});
+
+// Уменьшает фото перед отправкой; square — квадратная обрезка для аватарок
+async function prepImage(file, max, q, square) {
+  let bmp;
+  try { bmp = await createImageBitmap(file, {imageOrientation: 'from-image'}); }
+  catch {
+    bmp = new Image(); bmp.src = URL.createObjectURL(file);
+    try { await bmp.decode(); } catch { throw new Error('Не удалось открыть фото'); }
+    bmp.width = bmp.naturalWidth; bmp.height = bmp.naturalHeight;
+  }
+  const W = bmp.width, H = bmp.height;
+  if (file.type === 'image/gif' && !square) return {blob: file, w: W, h: H};
+  let sx = 0, sy = 0, sw = W, sh = H, cw, ch;
+  if (square) {
+    sw = sh = Math.min(W, H); sx = (W - sw) / 2; sy = (H - sh) / 2;
+    cw = ch = Math.min(sw, max);
+  } else {
+    const k = Math.min(1, max / Math.max(W, H));
+    cw = Math.round(W * k); ch = Math.round(H * k);
+  }
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch);
+  g.drawImage(bmp, sx, sy, sw, sh, 0, 0, cw, ch);
+  bmp.close?.();
+  const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', q));
+  if (!blob) throw new Error('Не удалось обработать фото');
+  return {blob, w: cw, h: ch};
+}
+const videoDims = url => new Promise(res => {
+  const v = document.createElement('video');
+  const done = d => { clearTimeout(t); res(d); };
+  const t = setTimeout(() => done({}), 4000);
+  v.preload = 'metadata'; v.muted = true;
+  v.onloadedmetadata = () => done({w: v.videoWidth, h: v.videoHeight});
+  v.onerror = () => done({});
+  v.src = url;
+});
+function upload(blob, kind, onp) {
+  return new Promise((res, rej) => {
+    const x = new XMLHttpRequest();
+    x.open('POST', `/api/upload?userId=${me.id}&kind=${kind}`);
+    x.setRequestHeader('Content-Type', blob.type || 'application/octet-stream');
+    x.upload.onprogress = e => e.lengthComputable && onp && onp(Math.round(e.loaded / e.total * 100));
+    x.onload = () => {
+      let d = {}; try { d = JSON.parse(x.responseText); } catch {}
+      x.status < 300 ? res(d) : rej(new Error(d.error || 'Не удалось загрузить файл'));
+    };
+    x.onerror = () => rej(new Error('Нет соединения'));
+    x.send(blob);
+  });
+}
+async function uploadAvatar(file) {
+  if (!file.type.startsWith('image/')) throw new Error('Выберите фото');
+  const r = await prepImage(file, 320, .88, true);
+  return (await upload(r.blob, 'avatar')).url;
+}
 
 /* ---------- Вход ---------- */
 let reg = true;
@@ -179,17 +276,15 @@ $('#authForm').onsubmit = async e => {
 function boot() {
   $('#auth').hidden = true;
   $('#app').hidden = false;
-  paintMe();
-  renderList();
-  connect();
+  paintMe(); renderList(); connect();
 }
-const paintMe = () => { $('#meBtn').innerHTML = av(me.username, me.id, 's'); };
+const paintMe = () => { $('#meBtn').innerHTML = uav(me, 's'); };
 
 function logout() {
   localStorage.removeItem('ovk_user');
-  me = null; cur = null; query = ''; found = [];
+  me = null; cur = null; query = ''; found = []; pend = null; opened = false;
   if (ws) { ws.onclose = null; ws.close(); }
-  chats = new Map(); msgs = new Map(); unread = new Map();
+  chats = new Map(); msgs = new Map();
   closeModal();
   $('#q').value = '';
   $('#app').hidden = true; $('#app').classList.remove('open');
@@ -198,29 +293,46 @@ function logout() {
 }
 
 /* ---------- Соединение ---------- */
+const getMsgs = id => api(`/api/messages/${encodeURIComponent(id)}?userId=${me.id}`);
+
 function connect() {
   if (!me) return;
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => {
+  ws.onopen = async () => {
     ws.send(JSON.stringify({type: 'connect', userId: me.id}));
     $('#conn').hidden = true;
-    loadChats();
+    await loadChats();
+    if (opened) { // после обрыва подтягиваем пропущенное
+      msgs.forEach((_, k) => { if (k !== cur) msgs.delete(k); });
+      if (cur) try { msgs.set(cur, await getMsgs(cur)); renderMsgs(); markRead(); } catch {}
+    }
+    opened = true;
   };
   ws.onmessage = e => onWs(JSON.parse(e.data));
   ws.onclose = () => { $('#conn').hidden = false; if (me) setTimeout(connect, 2000); };
 }
-document.addEventListener('visibilitychange', () => {
+function onVisible() {
   if (document.hidden || !me) return;
-  if (cur) { unread.delete(cur); renderList(); }
+  if (cur) { markRead(); renderList(); }
   if (!ws || ws.readyState > 1) connect();
-});
+}
+document.addEventListener('visibilitychange', onVisible);
+window.addEventListener('focus', onVisible);
 
 async function loadChats() {
   try {
-    const l = await api('/api/chats/' + me.id);
-    chats = new Map(l.map(c => [c.id, c]));
+    chats = new Map((await api('/api/chats/' + me.id)).map(c => [c.id, c]));
+    if (cur && chats.has(cur)) markRead();
     renderList(); renderHead();
   } catch {}
+}
+
+// Сообщаем серверу, что открытый чат прочитан
+function markRead() {
+  const c = chats.get(cur);
+  if (!c || document.hidden || !ws || ws.readyState !== 1) return;
+  c.unread = 0;
+  ws.send(JSON.stringify({type: 'read', chatId: cur}));
 }
 
 async function onWs(m) {
@@ -229,18 +341,21 @@ async function onWs(m) {
     let c = chats.get(d.chatId);
     if (!c) { await loadChats(); c = chats.get(d.chatId); if (!c) return; }
     c.last = d;
-    const l = msgs.get(d.chatId);
-    if (l && !l.some(x => x.id === d.id)) l.push(d);
     const mine = d.senderId === me.id;
-    if (!mine) { clearTimeout(typing.get(d.chatId)); typing.delete(d.chatId); }
-    if (!mine && !(cur === d.chatId && !document.hidden)) unread.set(d.chatId, (unread.get(d.chatId) || 0) + 1);
-    renderList();
-    if (cur === d.chatId) {
-      const box = $('#msgs'), top = box.scrollTop;
-      const near = box.scrollHeight - top - box.clientHeight < 150;
-      renderMsgs(); renderHead();
-      if (!near && !mine) box.scrollTop = top;
+    const l = msgs.get(d.chatId);
+    if (l && !l.some(x => x.id === d.id)) { l.push(d); if (cur === d.chatId) appendMsg(c, l, mine); }
+    if (!mine) {
+      clearTimeout(typing.get(d.chatId)); typing.delete(d.chatId);
+      if (cur === d.chatId && !document.hidden) markRead(); else c.unread = (c.unread || 0) + 1;
     }
+    renderList(); if (cur === d.chatId) renderHead();
+  } else if (m.type === 'read') {
+    const c = chats.get(d.chatId);
+    if (!c) return;
+    (c.reads = c.reads || {})[d.userId] = d.at;
+    if (d.userId === me.id) c.unread = 0; // прочитано на другом устройстве
+    if (cur === d.chatId) updateTicks();
+    renderList();
   } else if (m.type === 'presence') {
     chats.forEach(c => {
       if (c.peer && c.peer.id === d.userId) c.peer.online = d.online;
@@ -256,14 +371,30 @@ async function onWs(m) {
   }
 }
 
+/* ---------- Прочитано ---------- */
+const others = c => c.type === 'direct' ? (c.peer ? [c.peer.id] : []) : c.members.filter(u => u.id !== me.id).map(u => u.id);
+// В группе сообщение считается прочитанным, когда его увидел хотя бы один участник
+const isRead = (c, ts) => others(c).some(id => ((c.reads || {})[id] || '') >= ts);
+const tick = (c, ts) => { const r = isRead(c, ts); return `<span class="tk ${r ? 'rd' : ''}" data-t="${ts}">${r ? '✓✓' : '✓'}</span>`; };
+function updateTicks() {
+  const c = chats.get(cur);
+  if (!c) return;
+  msgsEl.querySelectorAll('.tk').forEach(el => {
+    const r = isRead(c, el.dataset.t);
+    el.textContent = r ? '✓✓' : '✓';
+    el.classList.toggle('rd', r);
+  });
+}
+
 /* ---------- Список чатов и поиск ---------- */
+const mlabel = m => m.media ? (m.media.kind === 'video' ? '🎥 Видео' : '📷 Фото') : '';
 function preview(c) {
   const l = c.last;
   if (!l) return c.type === 'group' ? c.members.length + ' участн.' : 'Нет сообщений';
   let who = '';
   if (l.senderId === me.id) who = 'Вы: ';
   else if (c.type === 'group') { const u = c.members.find(x => x.id === l.senderId); who = (u ? u.username : '?') + ': '; }
-  return who + l.text;
+  return who + [mlabel(l), l.text].filter(Boolean).join(' ');
 }
 function renderList() {
   const q = query.toLowerCase().replace(/^@/, '');
@@ -274,13 +405,14 @@ function renderList() {
   const people = q ? found.filter(u => !have.has(u.id)) : [];
 
   const chatsHtml = a.map(c => {
-    const n = unread.get(c.id) || 0;
-    return `<div class="it ${c.id === cur ? 'on' : ''}" data-c="${esc(c.id)}">${av(title(c), c.id, '', c.peer && c.peer.online)}
-<div class="im"><div class="r1"><span class="nm">${esc(title(c))}</span><span class="tm">${c.last ? lt(c.last.timestamp) : ''}</span></div>
+    const n = c.unread || 0;
+    const t = c.last ? (c.last.senderId === me.id ? tick(c, c.last.timestamp) : '') + lt(c.last.timestamp) : '';
+    return `<div class="it ${c.id === cur ? 'on' : ''}" data-c="${esc(c.id)}">${cav(c)}
+<div class="im"><div class="r1"><span class="nm">${esc(title(c))}</span><span class="tm">${t}</span></div>
 <div class="lm"><span>${esc(preview(c))}</span>${n ? `<span class="bd">${n}</span>` : ''}</div></div></div>`;
   }).join('');
   const peopleHtml = people.length ? '<div class="sec">Люди</div>' + people.map(u =>
-    `<div class="it" data-u="${u.id}">${av(u.username, u.id, '', u.online)}<div class="im"><div class="nm">${esc(u.username)}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
+    `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im"><div class="nm">${esc(u.username)}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
 
   $('#list').innerHTML = chatsHtml + peopleHtml ||
     `<div class="sec">${q ? 'Ничего не найдено' : 'Чатов пока нет. Найдите человека по имени или @юзернейму.'}</div>`;
@@ -307,16 +439,18 @@ $('#q').oninput = e => {
 
 /* ---------- Открытый чат ---------- */
 async function openChat(id) {
-  cur = id; unread.delete(id);
+  cur = id; pend = null; drawPend();
+  const c = chats.get(id);
+  if (c) c.unread = 0;
   $('#app').classList.add('open');
   $('#empty').hidden = true; $('#room').hidden = false;
   renderHead(); renderList();
   if (!msgs.has(id)) {
-    $('#msgs').innerHTML = '';
-    try { msgs.set(id, await api(`/api/messages/${encodeURIComponent(id)}?userId=${me.id}`)); } catch { msgs.set(id, []); }
+    msgsEl.innerHTML = '';
+    try { msgs.set(id, await getMsgs(id)); } catch { msgs.set(id, []); }
   }
   if (cur === id) {
-    renderMsgs();
+    renderMsgs(); markRead(); renderList();
     if (matchMedia('(pointer:fine)').matches) $('#inp').focus();
   }
 }
@@ -329,39 +463,66 @@ async function openUser(uid) {
     openChat(c.id);
   } catch (x) { alert(x.message); }
 }
-$('#back').onclick = () => { cur = null; $('#app').classList.remove('open'); $('#room').hidden = true; $('#empty').hidden = false; renderList(); };
+$('#back').onclick = () => { cur = null; pend = null; $('#app').classList.remove('open'); $('#room').hidden = true; $('#empty').hidden = false; renderList(); };
 
 function renderHead() {
   const c = chats.get(cur);
   if (!c) return;
-  const t = typing.has(cur);
-  const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : (c.peer && c.peer.online ? 'в сети' : 'не в сети');
-  $('#hd').innerHTML = av(title(c), c.id, 's', c.peer && c.peer.online) +
-    `<div class="im"><div class="nm">${esc(title(c))}</div><small class="${t || (c.peer && c.peer.online) ? 'ty' : ''}">${sub}</small></div>`;
+  const t = typing.has(cur), on = c.peer && c.peer.online;
+  const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : (on ? 'в сети' : 'не в сети');
+  $('#hd').innerHTML = cav(c, 's') +
+    `<div class="im"><div class="nm">${esc(title(c))}</div><small class="${t || on ? 'ty' : ''}">${sub}</small></div>`;
 }
 $('#hd').onclick = () => {
   const c = chats.get(cur);
   if (!c) return;
-  if (c.type === 'group') groupInfo(c); else if (c.peer) userProfile(c.peer);
+  if (c.type === 'group') groupInfo(c.id); else if (c.peer) userProfile(c.peer);
 };
 
-function renderMsgs() {
-  const c = chats.get(cur), l = msgs.get(cur) || [], box = $('#msgs');
-  box.innerHTML = l.length ? l.map((m, i) => {
-    const prev = l[i - 1], mine = m.senderId === me.id;
-    let h = '';
-    if (!prev || new Date(prev.timestamp).toDateString() !== new Date(m.timestamp).toDateString()) h += `<div class="day">${dl(m.timestamp)}</div>`;
-    let who = '';
-    if (c.type === 'group' && !mine && (!prev || prev.senderId !== m.senderId)) {
-      const u = c.members.find(x => x.id === m.senderId);
-      who = `<b>${esc(u ? u.username : '?')}</b>`;
-    }
-    return h + `<div class="m ${mine ? 'me' : ''}">${who}${esc(m.text)}<time>${hm(m.timestamp)}</time></div>`;
-  }).join('') : '<div class="day">Напишите первое сообщение</div>';
-  box.scrollTop = box.scrollHeight;
-}
+/* ---------- Сообщения ---------- */
+let stick = true;
+const toBottom = () => { msgsEl.scrollTop = msgsEl.scrollHeight; stick = true; };
+msgsEl.onscroll = () => { stick = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 120; };
+// Когда догружается фото/видео, остаёмся внизу, если были внизу
+['load', 'loadedmetadata'].forEach(ev => msgsEl.addEventListener(ev, () => { if (stick) msgsEl.scrollTop = msgsEl.scrollHeight; }, true));
 
-/* ---------- Ввод сообщения ---------- */
+const mediaHtml = md => {
+  const ar = md.w && md.h ? `aspect-ratio:${md.w}/${md.h};` : '';
+  return md.kind === 'video'
+    ? `<video src="${esc(md.url)}" controls playsinline preload="metadata" style="${ar}"></video>`
+    : `<img class="ph" src="${esc(md.url)}" alt="Фото" loading="lazy" style="${ar}">`;
+};
+function msgHtml(c, l, i) {
+  const m = l[i], prev = l[i - 1], mine = m.senderId === me.id;
+  let h = '';
+  if (!prev || new Date(prev.timestamp).toDateString() !== new Date(m.timestamp).toDateString())
+    h += `<div class="day">${dl(m.timestamp)}</div>`;
+  let who = '';
+  if (c.type === 'group' && !mine && (!prev || prev.senderId !== m.senderId)) {
+    const u = c.members.find(x => x.id === m.senderId);
+    who = `<b>${esc(u ? u.username : '?')}</b>`;
+  }
+  return h + `<div class="m ${mine ? 'me' : ''} ${m.media ? 'mm' : ''}">${who}${m.media ? mediaHtml(m.media) : ''}${m.text ? `<span class="tx">${esc(m.text)}</span>` : ''}<time>${hm(m.timestamp)}${mine ? tick(c, m.timestamp) : ''}</time></div>`;
+}
+function renderMsgs() {
+  const c = chats.get(cur), l = msgs.get(cur) || [];
+  if (!c) return;
+  msgsEl.innerHTML = l.length ? l.map((_, i) => msgHtml(c, l, i)).join('') : '<div class="day" id="nomsg">Напишите первое сообщение</div>';
+  toBottom();
+}
+// Новое сообщение добавляется в конец, остальное не перерисовывается (видео не прерывается)
+function appendMsg(c, l, mine) {
+  $('#nomsg')?.remove();
+  msgsEl.insertAdjacentHTML('beforeend', msgHtml(c, l, l.length - 1));
+  if (mine || stick) toBottom();
+}
+msgsEl.onclick = e => {
+  const i = e.target.closest('img.ph');
+  if (i) { $('#lbi').src = i.src; $('#lb').hidden = false; }
+};
+$('#lb').onclick = () => { $('#lb').hidden = true; $('#lbi').src = ''; };
+
+/* ---------- Ввод и вложения ---------- */
 const inp = $('#inp');
 const fit = () => { inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 120) + 'px'; };
 let tt = 0;
@@ -376,12 +537,53 @@ inp.onkeydown = e => {
   if (e.key === 'Enter' && !e.shiftKey && matchMedia('(pointer:fine)').matches) { e.preventDefault(); $('#form').requestSubmit(); }
 };
 $('#send').onpointerdown = e => e.preventDefault(); // кнопка не забирает фокус — клавиатура остаётся
+
+function drawPend() {
+  const el = $('#pend');
+  if (!pend) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = (pend.kind === 'video'
+    ? `<video class="th" src="${pend.local}#t=0.1" muted playsinline preload="metadata"></video>`
+    : `<img class="th" src="${pend.local}" alt="">`) +
+    '<div class="st"></div><button type="button" class="ib" id="px" aria-label="Убрать вложение">✕</button>';
+  $('#px').onclick = () => { pend = null; drawPend(); };
+  pendStatus();
+}
+function pendStatus() {
+  const s = $('#pend .st');
+  if (s && pend) s.textContent = pend.busy ? `Загрузка ${pend.pct}%` : 'Готово. Добавьте подпись или отправьте';
+}
+$('#attach').onclick = async () => {
+  const f = await pickFile('image/*,video/*');
+  if (!f || !cur) return;
+  const isV = f.type.startsWith('video/');
+  if (!isV && !f.type.startsWith('image/')) return alert('Выберите фото или видео');
+  if (isV && f.size > 50 * 1024 * 1024) return alert('Видео больше 50 МБ');
+
+  const p = pend = {kind: isV ? 'video' : 'image', local: URL.createObjectURL(f), pct: 0, busy: true};
+  drawPend();
+  try {
+    let blob = f, dims;
+    if (isV) dims = await videoDims(p.local);
+    else { const r = await prepImage(f, 1600, .85); blob = r.blob; dims = r; }
+    const up = await upload(blob, 'media', pct => { p.pct = pct; if (pend === p) pendStatus(); });
+    if (pend !== p) return; // вложение убрали
+    Object.assign(p, {url: up.url, w: dims.w, h: dims.h, busy: false});
+    pendStatus();
+  } catch (x) {
+    if (pend === p) { pend = null; drawPend(); }
+    alert(x.message);
+  }
+};
+
 $('#form').onsubmit = e => {
   e.preventDefault();
   const text = inp.value.trim();
-  if (!text || !cur) return;
+  if ((!text && !pend) || !cur || (pend && pend.busy)) return;
   if (!ws || ws.readyState !== 1) { $('#conn').hidden = false; return; }
-  ws.send(JSON.stringify({type: 'message', chatId: cur, text}));
+  const media = pend && {kind: pend.kind, url: pend.url, w: pend.w, h: pend.h};
+  ws.send(JSON.stringify({type: 'message', chatId: cur, text, media}));
+  pend = null; drawPend();
   inp.value = ''; fit(); inp.focus();
 };
 
@@ -389,29 +591,73 @@ $('#form').onsubmit = e => {
 const closeModal = () => { $('#modal').hidden = true; $('#card').innerHTML = ''; };
 const modal = h => { $('#card').innerHTML = h; $('#modal').hidden = false; };
 $('#modal').onclick = e => { if (e.target.id === 'modal' || e.target.closest('[data-x]')) closeModal(); };
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!$('#lb').hidden) $('#lb').click(); else closeModal();
+});
 
+// Выбор участников (для новой группы и для добавления в существующую)
+function picker(box, exclude) {
+  const sel = new Set();
+  let t;
+  box.innerHTML = `<div class="f"><label>Участники</label><input class="ps" placeholder="Поиск по имени или @юзернейму" autocomplete="off" autocapitalize="off"></div>
+<div class="pc" style="color:var(--t2);font-size:13px;min-height:18px"></div><div class="pl" style="max-height:220px;overflow:auto"></div>`;
+  const input = box.querySelector('.ps'), cnt = box.querySelector('.pc'), list = box.querySelector('.pl');
+  const find = async () => {
+    try {
+      const r = (await api(`/api/users/search?q=${encodeURIComponent(input.value.replace(/^@/, ''))}&userId=${me.id}`)).filter(u => !exclude.has(u.id));
+      list.innerHTML = r.map(u => `<label class="it" style="padding:6px 0"><input type="checkbox" data-u="${u.id}" ${sel.has(u.id) ? 'checked' : ''}>${uav(u, 's')}<div class="im"><div class="nm">${esc(u.username)}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></label>`).join('')
+        || '<div class="sec" style="padding-left:0">Никого не нашли</div>';
+    } catch {}
+  };
+  input.oninput = () => { clearTimeout(t); t = setTimeout(find, 250); };
+  list.onchange = e => {
+    const id = +e.target.dataset.u;
+    if (e.target.checked) sel.add(id); else sel.delete(id);
+    cnt.textContent = sel.size ? 'Выбрано: ' + sel.size : '';
+  };
+  find();
+  return sel;
+}
+
+/* ---------- Мой профиль ---------- */
 $('#meBtn').onclick = myProfile;
 function myProfile() {
-  modal(`${av(me.username, me.id, 'l')}
-<form id="pf" style="margin-top:16px">
+  modal(`<div style="text-align:center"><div id="pav">${uav(me, 'l')}</div>
+<button class="lnk" id="pph">Сменить фото</button><button class="lnk" id="prm" ${me.avatar ? '' : 'hidden'}>Убрать</button></div>
+<form id="pf" style="margin-top:12px">
 <div class="f"><label>Имя</label><input id="pn" value="${esc(me.username)}" maxlength="40"></div>
 <div class="f"><label>Юзернейм</label><input id="ph" value="${esc(me.handle)}" maxlength="21" autocapitalize="off" autocomplete="off"></div>
 <div class="f"><label>О себе</label><textarea id="pb" rows="3" maxlength="200">${esc(me.bio)}</textarea></div>
 <div class="err" id="perr"></div>
 <div class="row"><button class="btn">Сохранить</button><button type="button" class="btn g" data-x>Закрыть</button></div>
 <div class="row"><button type="button" class="btn r" id="lo">Выйти из аккаунта</button></div></form>`);
+
+  const saveAv = async url => {
+    const d = await api('/api/profile/' + me.id, 'PUT', {avatar: url});
+    me = d.user; save(); paintMe();
+    const pav = $('#pav'); if (pav) { pav.innerHTML = uav(me, 'l'); $('#prm').hidden = !me.avatar; }
+  };
+  $('#pph').onclick = async () => {
+    const f = await pickFile('image/*');
+    if (!f) return;
+    const b = $('#pph'); b.textContent = 'Загрузка…'; b.disabled = true;
+    try { await saveAv(await uploadAvatar(f)); } catch (x) { const e = $('#perr'); if (e) e.textContent = x.message; }
+    if ($('#pph')) { b.textContent = 'Сменить фото'; b.disabled = false; }
+  };
+  $('#prm').onclick = () => saveAv('').catch(x => { $('#perr').textContent = x.message; });
   $('#pf').onsubmit = async e => {
     e.preventDefault();
     try {
       const d = await api('/api/profile/' + me.id, 'PUT', {username: $('#pn').value, handle: $('#ph').value, bio: $('#pb').value});
-      me = d.user; save(); paintMe(); closeModal(); loadChats();
+      me = d.user; save(); paintMe(); closeModal();
     } catch (x) { $('#perr').textContent = x.message; }
   };
   $('#lo').onclick = logout;
 }
 
 function userProfile(u) {
-  modal(`<div style="text-align:center">${av(u.username, u.id, 'l', u.online)}
+  modal(`<div style="text-align:center">${uav(u, 'l', true)}
 <h2 style="margin-top:12px">${esc(u.username)}</h2>
 <div style="color:var(--p)">@${esc(u.handle)}</div>
 <div style="color:var(--t2);font-size:13px">${u.online ? 'в сети' : 'не в сети'}</div>
@@ -420,49 +666,95 @@ ${u.bio ? `<p style="margin-top:12px">${esc(u.bio)}</p>` : ''}</div>
   $('#wr').onclick = () => openUser(u.id);
 }
 
-function groupInfo(c) {
-  modal(`<h2>${esc(c.name)}</h2><div class="sec" style="padding-left:0">${c.members.length} участн.</div>` +
-    c.members.map(u => `<div class="it" data-p="${u.id}" style="padding-left:0">${av(u.username, u.id, 's', u.online)}<div class="im"><div class="nm">${esc(u.username)}${u.id === me.id ? ' (вы)' : ''}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') +
-    '<div class="row"><button class="btn g" data-x>Закрыть</button></div>');
+/* ---------- Группы ---------- */
+function putChat(g) {
+  if (g.id === cur) g.unread = 0;
+  chats.set(g.id, g);
+  renderList(); renderHead();
+}
+
+function groupInfo(id) {
+  const c = chats.get(id);
+  if (!c) return;
+  modal(`<div style="text-align:center"><div id="gav">${cav(c, 'l')}</div>
+<button class="lnk" id="gph">Сменить фото</button><button class="lnk" id="grm" ${c.avatar ? '' : 'hidden'}>Убрать</button></div>
+<form id="gf" style="margin-top:12px">
+<div class="f"><label>Название группы</label><input id="gname" value="${esc(c.name)}" maxlength="40"></div>
+<div class="err" id="ge"></div>
+<button class="btn">Сохранить название</button></form>
+<div class="sec" style="padding-left:0;margin-top:10px">Участники: ${c.members.length}</div>
+<button type="button" class="btn g" id="gadd" style="margin:4px 0 6px">＋ Добавить участников</button>
+<div style="max-height:220px;overflow:auto">${c.members.map(u =>
+  `<div class="it" data-p="${u.id}" style="padding-left:0;padding-right:0">${uav(u, 's', true)}<div class="im"><div class="nm">${esc(u.username)}${u.id === me.id ? ' (вы)' : ''}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
+<div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+
+  const patch = async body => {
+    const g = await api('/api/groups/' + encodeURIComponent(id), 'PUT', {userId: me.id, ...body});
+    putChat(g);
+    const gav = $('#gav'); if (gav) { gav.innerHTML = cav(g, 'l'); $('#grm').hidden = !g.avatar; }
+  };
+  $('#gf').onsubmit = async e => {
+    e.preventDefault();
+    try { await patch({name: $('#gname').value}); closeModal(); } catch (x) { $('#ge').textContent = x.message; }
+  };
+  $('#gph').onclick = async () => {
+    const f = await pickFile('image/*');
+    if (!f) return;
+    const b = $('#gph'); b.textContent = 'Загрузка…'; b.disabled = true;
+    try { await patch({avatar: await uploadAvatar(f)}); } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
+    if ($('#gph')) { b.textContent = 'Сменить фото'; b.disabled = false; }
+  };
+  $('#grm').onclick = () => patch({avatar: ''}).catch(x => { $('#ge').textContent = x.message; });
+  $('#gadd').onclick = () => addMembers(id);
   $('#card').querySelectorAll('[data-p]').forEach(el => el.onclick = () => {
     const u = c.members.find(x => x.id == el.dataset.p);
     if (u && u.id !== me.id) userProfile(u);
   });
 }
 
-$('#newGroup').onclick = () => {
-  const sel = new Set();
-  let res = [], gt;
-  modal(`<h2 style="margin-bottom:12px">Новая группа</h2>
-<div class="f"><label>Название</label><input id="gn" maxlength="40"></div>
-<div class="f"><label>Участники</label><input id="gs" placeholder="Поиск по имени или @юзернейму" autocomplete="off" autocapitalize="off"></div>
-<div id="gc" style="color:var(--t2);font-size:13px;min-height:18px"></div>
-<div id="gl" style="max-height:220px;overflow:auto"></div>
-<div class="err" id="gerr"></div>
-<div class="row"><button class="btn" id="gok">Создать</button><button class="btn g" data-x>Отмена</button></div>`);
-  const cnt = () => { $('#gc').textContent = sel.size ? 'Выбрано: ' + sel.size : ''; };
-  const find = async () => {
+function addMembers(id) {
+  const c = chats.get(id);
+  if (!c) return;
+  modal(`<h2 style="margin-bottom:12px">Добавить в «${esc(c.name)}»</h2><div id="pk"></div>
+<div class="err" id="ge"></div>
+<div class="row"><button class="btn" id="aok">Добавить</button><button type="button" class="btn g" id="aback">Назад</button></div>`);
+  const sel = picker($('#pk'), new Set(c.members.map(u => u.id)));
+  $('#aback').onclick = () => groupInfo(id);
+  $('#aok').onclick = async () => {
+    if (!sel.size) { $('#ge').textContent = 'Выберите хотя бы одного человека'; return; }
     try {
-      res = await api(`/api/users/search?q=${encodeURIComponent($('#gs').value.replace(/^@/, ''))}&userId=${me.id}`);
-      $('#gl').innerHTML = res.map(u => `<label class="it" style="padding:6px 0"><input type="checkbox" data-u="${u.id}" ${sel.has(u.id) ? 'checked' : ''}>${av(u.username, u.id, 's')}<div class="im"><div class="nm">${esc(u.username)}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></label>`).join('') || '<div class="sec" style="padding-left:0">Никого не нашли</div>';
-    } catch {}
+      putChat(await api(`/api/groups/${encodeURIComponent(id)}/members`, 'POST', {userId: me.id, members: [...sel]}));
+      groupInfo(id);
+    } catch (x) { $('#ge').textContent = x.message; }
   };
-  $('#gs').oninput = () => { clearTimeout(gt); gt = setTimeout(find, 250); };
-  $('#gl').onchange = e => {
-    const id = +e.target.dataset.u;
-    if (e.target.checked) sel.add(id); else sel.delete(id);
-    cnt();
-  };
+}
+
+$('#newGroup').onclick = () => {
+  modal(`<h2 style="margin-bottom:12px">Новая группа</h2>
+<div class="f"><label>Название</label><input id="gn" maxlength="40"></div><div id="pk"></div>
+<div class="err" id="ge"></div>
+<div class="row"><button class="btn" id="gok">Создать</button><button type="button" class="btn g" data-x>Отмена</button></div>`);
+  const sel = picker($('#pk'), new Set());
   $('#gok').onclick = async () => {
     const name = $('#gn').value.trim();
-    if (!name || !sel.size) { $('#gerr').textContent = 'Введите название и выберите участников'; return; }
+    if (!name || !sel.size) { $('#ge').textContent = 'Введите название и выберите участников'; return; }
     try {
       const g = await api('/api/groups', 'POST', {userId: me.id, name, members: [...sel]});
       chats.set(g.id, g); closeModal(); openChat(g.id);
-    } catch (x) { $('#gerr').textContent = x.message; }
+    } catch (x) { $('#ge').textContent = x.message; }
   };
-  find();
 };
+
+/* ---------- Клавиатура на телефоне: подгоняем высоту под видимую область ---------- */
+if (window.visualViewport) {
+  const vv = visualViewport;
+  const fitVV = () => {
+    $('#app').style.height = vv.height + 'px';
+    if (/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) window.scrollTo(0, 0);
+  };
+  vv.addEventListener('resize', fitVV);
+  vv.addEventListener('scroll', fitVV);
+}
 
 /* ---------- Запуск ---------- */
 (async () => {
