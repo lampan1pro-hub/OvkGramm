@@ -693,6 +693,116 @@
             font-size: 14px;
         }
 
+        .edit-profile-section {
+            margin-bottom: 20px;
+        }
+
+        .edit-form-group {
+            margin-bottom: 16px;
+        }
+
+        .edit-form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .edit-form-group input,
+        .edit-form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .edit-form-group input:focus,
+        .edit-form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .group-members-list {
+            background: var(--bg-light);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .group-member-item {
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .group-member-item:hover {
+            background: white;
+        }
+
+        .group-member-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .profile-btn-bottom {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .profile-btn-bottom:hover {
+            background: var(--primary-dark);
+            transform: scale(1.1);
+        }
+
+        .create-group-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px;
+            margin-top: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .create-group-btn:hover {
+            background: var(--primary-dark);
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
@@ -746,11 +856,15 @@
                 this.selectedUserId = null;
                 this.allUsers = [];
                 this.chats = new Map();
+                this.groups = [];
                 this.showProfileMenu = false;
                 this.showUserProfile = false;
+                this.showEditProfile = false;
+                this.showCreateGroup = false;
                 this.selectedUserProfile = null;
                 this.activeTab = 'chats';
                 this.searchQuery = '';
+                this.selectedGroupMembers = new Set();
                 this.init();
             }
 
@@ -764,6 +878,8 @@
                 const saved = localStorage.getItem('ovkgramm_user');
                 if (saved) {
                     this.currentUser = JSON.parse(saved);
+                    if (!this.currentUser.bio) this.currentUser.bio = '';
+                    if (!this.currentUser.avatar) this.currentUser.avatar = '';
                 }
             }
 
@@ -845,7 +961,11 @@
 
                     const data = await res.json();
                     if (res.ok) {
-                        this.currentUser = data.user;
+                        this.currentUser = {
+                            ...data.user,
+                            bio: '',
+                            avatar: ''
+                        };
                         this.saveState();
                         this.loadUsers();
                         return true;
@@ -869,7 +989,11 @@
 
                     const data = await res.json();
                     if (res.ok) {
-                        this.currentUser = data.user;
+                        this.currentUser = {
+                            ...data.user,
+                            bio: data.user.bio || '',
+                            avatar: data.user.avatar || ''
+                        };
                         this.saveState();
                         this.loadUsers();
                         return true;
@@ -888,6 +1012,7 @@
                     const res = await fetch(`${API_URL}/api/users`);
                     this.allUsers = await res.json();
                     this.allUsers = this.allUsers.filter(u => u.id !== this.currentUser.id);
+                    await this.loadGroups();
                     this.render();
                 } catch (err) {
                     console.error('Error loading users:', err);
@@ -1040,6 +1165,8 @@
 
                     ${this.showProfileMenu ? this.renderProfileMenu() : ''}
                     ${this.showUserProfile ? this.renderUserProfileModal() : ''}
+                    ${this.showEditProfile ? this.renderEditProfileModal() : ''}
+                    ${this.showCreateGroup ? this.renderCreateGroupModal() : ''}
                 `;
             }
 
@@ -1067,18 +1194,36 @@
             }
 
             renderChatsList(chats) {
-                if (chats.length === 0) {
-                    return '<div style="padding: 24px; text-align: center; color: var(--text-secondary);">📭 Нет переписок</div>';
-                }
-                return chats.map(chat => `
-                    <div class="chat-item ${this.selectedUserId === chat.userId ? 'active' : ''}" data-user-id="${chat.userId}">
-                        <div class="chat-item-header">
-                            <span class="chat-item-name">${chat.user.username}</span>
-                            <span class="chat-item-time">${this.formatTime(chat.lastMessage.timestamp)}</span>
+                const groupsHtml = this.groups.length > 0 ? `
+                    <div style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Группы</div>
+                    ${this.groups.map(group => `
+                        <div class="chat-item" data-group-id="${group.id}">
+                            <div class="chat-item-header">
+                                <span class="chat-item-name">👥 ${group.name}</span>
+                            </div>
+                            <div class="chat-item-message">${group.members.length} участников</div>
                         </div>
-                        <div class="chat-item-message">${this.escapeHtml(chat.lastMessage.text)}</div>
-                    </div>
-                `).join('');
+                    `).join('')}
+                ` : '';
+
+                const chatsHtml = chats.length === 0 && this.groups.length === 0
+                    ? '<div style="padding: 24px; text-align: center; color: var(--text-secondary);">📭 Нет переписок</div>'
+                    : chats.map(chat => `
+                        <div class="chat-item ${this.selectedUserId === chat.userId ? 'active' : ''}" data-user-id="${chat.userId}">
+                            <div class="chat-item-header">
+                                <span class="chat-item-name">${chat.user.username}</span>
+                                <span class="chat-item-time">${this.formatTime(chat.lastMessage.timestamp)}</span>
+                            </div>
+                            <div class="chat-item-message">${this.escapeHtml(chat.lastMessage.text)}</div>
+                        </div>
+                    `).join('');
+
+                return `
+                    <button class="create-group-btn" id="create-group-open-btn">➕ Создать группу</button>
+                    ${groupsHtml}
+                    ${chats.length > 0 ? '<div style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Прямые</div>' : ''}
+                    ${chatsHtml}
+                `;
             }
 
             renderContactsList(users) {
@@ -1126,7 +1271,8 @@
                             </div>
                         `).join('')}
                     </div>
-                    <div class="input-area">
+                    <div class="input-area" style="position: relative;">
+                        <button class="profile-btn-bottom" id="user-profile-bottom" title="Профиль ${user.username}">👤</button>
                         <div class="input-wrapper">
                             <input type="text" class="message-input" id="message-input" placeholder="Сообщение..." ${!isConnected ? 'disabled' : ''}>
                         </div>
@@ -1161,6 +1307,8 @@
                 const user = this.selectedUserProfile;
                 if (!user) return '';
 
+                const isOwnProfile = user.id === this.currentUser.id;
+
                 return `
                     <div class="modal show" id="user-profile-modal">
                         <div class="modal-content">
@@ -1178,18 +1326,80 @@
                                     <div class="profile-label">Email</div>
                                     <div class="profile-value">${user.email}</div>
                                 </div>
-                                <div class="profile-row">
+                                ${user.bio ? `<div class="profile-row">
                                     <div class="profile-label">Статус</div>
-                                    <div class="profile-value">${user.status === 'online' ? '🟢 Онлайн' : '⚫ Оффлайн'}</div>
-                                </div>
+                                    <div class="profile-value">${this.escapeHtml(user.bio)}</div>
+                                </div>` : ''}
                                 <div class="profile-row">
                                     <div class="profile-label">В сети с</div>
                                     <div class="profile-value">${new Date(user.createdAt).toLocaleDateString('ru-RU')}</div>
                                 </div>
                             </div>
                             <div class="profile-actions">
-                                <button class="btn btn-primary" id="start-chat-btn">💬 Написать</button>
-                                <button class="btn btn-secondary" id="close-profile-btn">Закрыть</button>
+                                ${isOwnProfile ? `
+                                    <button class="btn btn-primary" id="edit-profile-btn">✏️ Редактировать</button>
+                                    <button class="btn btn-secondary" id="close-profile-btn">Закрыть</button>
+                                ` : `
+                                    <button class="btn btn-primary" id="start-chat-btn">💬 Написать</button>
+                                    <button class="btn btn-secondary" id="close-profile-btn">Закрыть</button>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderEditProfileModal() {
+                return `
+                    <div class="modal show" id="edit-profile-modal">
+                        <div class="modal-content">
+                            <button class="modal-close" id="close-edit-profile">✕</button>
+                            <h2 style="margin-bottom: 20px;">Редактирование профиля</h2>
+                            <div class="edit-profile-section">
+                                <div class="edit-form-group">
+                                    <label>Имя пользователя</label>
+                                    <input type="text" id="edit-username" value="${this.escapeHtml(this.currentUser.username)}" placeholder="Твое имя">
+                                </div>
+                                <div class="edit-form-group">
+                                    <label>Статус (О себе)</label>
+                                    <textarea id="edit-bio" placeholder="Напиши о себе..." rows="3">${this.currentUser.bio || ''}</textarea>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary" id="save-profile-btn" style="flex: 1;">💾 Сохранить</button>
+                                <button class="btn btn-secondary" id="close-edit-profile-btn" style="flex: 1;">Отмена</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderCreateGroupModal() {
+                return `
+                    <div class="modal show" id="create-group-modal">
+                        <div class="modal-content">
+                            <button class="modal-close" id="close-create-group">✕</button>
+                            <h2 style="margin-bottom: 20px;">Создать группу</h2>
+                            <div class="edit-form-group">
+                                <label>Название группы</label>
+                                <input type="text" id="group-name" placeholder="Например: Друзья" maxlength="50">
+                            </div>
+                            <div class="edit-form-group">
+                                <label>Выбери участников</label>
+                                <div class="group-members-list">
+                                    ${this.allUsers.map(user => `
+                                        <label class="group-member-item">
+                                            <input type="checkbox" class="group-member-checkbox" value="${user.id}" 
+                                                ${this.selectedGroupMembers.has(user.id) ? 'checked' : ''}>
+                                            <span>${user.username}</span>
+                                            <span class="status-dot ${user.status}"></span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary" id="create-group-btn" style="flex: 1;">✅ Создать</button>
+                                <button class="btn btn-secondary" id="close-create-group-btn" style="flex: 1;">Отмена</button>
                             </div>
                         </div>
                     </div>
@@ -1220,6 +1430,66 @@
                     this.render();
                 } catch (err) {
                     console.error('Error loading profile:', err);
+                }
+            }
+
+            async updateProfile(username, bio) {
+                try {
+                    const res = await fetch(`${API_URL}/api/profile/${this.currentUser.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, bio })
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.currentUser = data.user;
+                        this.saveState();
+                        this.showEditProfile = false;
+                        this.render();
+                    }
+                } catch (err) {
+                    alert('Ошибка при сохранении профиля');
+                }
+            }
+
+            async createGroup(groupName) {
+                if (!groupName || this.selectedGroupMembers.size === 0) {
+                    alert('Введи имя группы и выбери участников');
+                    return;
+                }
+
+                try {
+                    const members = Array.from(this.selectedGroupMembers).map(Number);
+                    const res = await fetch(`${API_URL}/api/groups`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: this.currentUser.id,
+                            groupName,
+                            members
+                        })
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.groups.push(data.group);
+                        this.selectedGroupMembers.clear();
+                        this.showCreateGroup = false;
+                        this.activeTab = 'chats';
+                        this.render();
+                    }
+                } catch (err) {
+                    alert('Ошибка при создании группы');
+                }
+            }
+
+            async loadGroups() {
+                try {
+                    const res = await fetch(`${API_URL}/api/groups/${this.currentUser.id}`);
+                    this.groups = await res.json();
+                } catch (err) {
+                    console.error('Error loading groups:', err);
                 }
             }
 
@@ -1275,6 +1545,7 @@
                 document.querySelectorAll('.tab').forEach(tab => {
                     tab.addEventListener('click', () => {
                         this.activeTab = tab.dataset.tab;
+                        this.searchQuery = '';
                         this.render();
                     });
                 });
@@ -1282,22 +1553,20 @@
                 // User/Chat selection
                 document.querySelectorAll('.user-item, .chat-item').forEach(item => {
                     item.addEventListener('click', () => {
-                        const userId = parseInt(item.dataset.userId);
-                        this.startChat(userId);
+                        const userId = item.dataset.userId;
+                        if (userId) {
+                            this.startChat(parseInt(userId));
+                        }
                     });
                 });
 
-                // User profile on long click (right click)
+                // User profile on double click
                 document.querySelectorAll('.user-item, .chat-item').forEach(item => {
-                    item.addEventListener('contextmenu', (e) => {
-                        e.preventDefault();
-                        const userId = parseInt(item.dataset.userId);
-                        this.loadUserProfile(userId);
-                    });
-
                     item.addEventListener('dblclick', () => {
-                        const userId = parseInt(item.dataset.userId);
-                        this.loadUserProfile(userId);
+                        const userId = item.dataset.userId;
+                        if (userId) {
+                            this.loadUserProfile(parseInt(userId));
+                        }
                     });
                 });
 
@@ -1314,28 +1583,41 @@
                 const messageInput = document.getElementById('message-input');
                 const sendBtn = document.getElementById('send-btn');
 
-                if (sendBtn) {
+                if (sendBtn && messageInput) {
                     sendBtn.addEventListener('click', () => {
-                        this.sendMessage(messageInput.value);
-                        messageInput.value = '';
-                        messageInput.focus();
+                        if (messageInput.value.trim()) {
+                            this.sendMessage(messageInput.value);
+                            messageInput.value = '';
+                            messageInput.focus();
+                        }
                     });
-                }
 
-                if (messageInput) {
                     messageInput.addEventListener('keypress', (e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
-                            this.sendMessage(messageInput.value);
-                            messageInput.value = '';
+                            if (messageInput.value.trim()) {
+                                this.sendMessage(messageInput.value);
+                                messageInput.value = '';
+                            }
                         }
+                    });
+                }
+
+                // Profile bottom button
+                const userProfileBottomBtn = document.getElementById('user-profile-bottom');
+                if (userProfileBottomBtn && this.selectedUserId) {
+                    userProfileBottomBtn.addEventListener('click', () => {
+                        this.loadUserProfile(this.selectedUserId);
                     });
                 }
 
                 // Profile menu
                 const profileBtn = document.getElementById('profile-btn');
                 if (profileBtn) {
-                    profileBtn.addEventListener('click', () => this.toggleMenu());
+                    profileBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.toggleMenu();
+                    });
                 }
 
                 const logoutBtn = document.getElementById('logout-btn');
@@ -1347,16 +1629,15 @@
                 if (viewOwnProfile) {
                     viewOwnProfile.addEventListener('click', () => {
                         this.showProfileMenu = false;
-                        this.selectedUserProfile = this.currentUser;
-                        this.showUserProfile = true;
-                        this.render();
+                        this.loadUserProfile(this.currentUser.id);
                     });
                 }
 
-                // Profile modal
+                // User profile modal
                 const closeProfileBtn = document.getElementById('close-profile');
                 const closeProfileBtn2 = document.getElementById('close-profile-btn');
                 const startChatBtn = document.getElementById('start-chat-btn');
+                const editProfileBtn = document.getElementById('edit-profile-btn');
 
                 if (closeProfileBtn) {
                     closeProfileBtn.addEventListener('click', () => {
@@ -1381,16 +1662,104 @@
                     });
                 }
 
-                // Close modal on background click
-                const modal = document.getElementById('user-profile-modal');
-                if (modal) {
-                    modal.addEventListener('click', (e) => {
-                        if (e.target === modal) {
-                            this.showUserProfile = false;
-                            this.render();
+                if (editProfileBtn) {
+                    editProfileBtn.addEventListener('click', () => {
+                        this.showUserProfile = false;
+                        this.showEditProfile = true;
+                        this.render();
+                    });
+                }
+
+                // Edit profile modal
+                const closeEditProfileBtn = document.getElementById('close-edit-profile');
+                const closeEditProfileBtn2 = document.getElementById('close-edit-profile-btn');
+                const saveProfileBtn = document.getElementById('save-profile-btn');
+
+                if (closeEditProfileBtn) {
+                    closeEditProfileBtn.addEventListener('click', () => {
+                        this.showEditProfile = false;
+                        this.render();
+                    });
+                }
+
+                if (closeEditProfileBtn2) {
+                    closeEditProfileBtn2.addEventListener('click', () => {
+                        this.showEditProfile = false;
+                        this.render();
+                    });
+                }
+
+                if (saveProfileBtn) {
+                    saveProfileBtn.addEventListener('click', () => {
+                        const username = document.getElementById('edit-username').value;
+                        const bio = document.getElementById('edit-bio').value;
+                        if (username.trim()) {
+                            this.updateProfile(username, bio);
+                        } else {
+                            alert('Имя не может быть пустым');
                         }
                     });
                 }
+
+                // Create group
+                const createGroupOpenBtn = document.getElementById('create-group-open-btn');
+                if (createGroupOpenBtn) {
+                    createGroupOpenBtn.addEventListener('click', () => {
+                        this.selectedGroupMembers.clear();
+                        this.showCreateGroup = true;
+                        this.render();
+                    });
+                }
+
+                // Create group modal
+                const closeCreateGroupBtn = document.getElementById('close-create-group');
+                const closeCreateGroupBtn2 = document.getElementById('close-create-group-btn');
+                const createGroupBtn = document.getElementById('create-group-btn');
+
+                if (closeCreateGroupBtn) {
+                    closeCreateGroupBtn.addEventListener('click', () => {
+                        this.showCreateGroup = false;
+                        this.render();
+                    });
+                }
+
+                if (closeCreateGroupBtn2) {
+                    closeCreateGroupBtn2.addEventListener('click', () => {
+                        this.showCreateGroup = false;
+                        this.render();
+                    });
+                }
+
+                // Group member selection
+                document.querySelectorAll('.group-member-checkbox').forEach(checkbox => {
+                    checkbox.addEventListener('change', (e) => {
+                        const userId = parseInt(e.target.value);
+                        if (e.target.checked) {
+                            this.selectedGroupMembers.add(userId);
+                        } else {
+                            this.selectedGroupMembers.delete(userId);
+                        }
+                    });
+                });
+
+                if (createGroupBtn) {
+                    createGroupBtn.addEventListener('click', () => {
+                        const groupName = document.getElementById('group-name').value;
+                        this.createGroup(groupName);
+                    });
+                }
+
+                // Close modals on background click
+                document.querySelectorAll('.modal').forEach(modal => {
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) {
+                            this.showUserProfile = false;
+                            this.showEditProfile = false;
+                            this.showCreateGroup = false;
+                            this.render();
+                        }
+                    });
+                });
 
                 // Auto scroll
                 setTimeout(() => {
