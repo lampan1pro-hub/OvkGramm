@@ -1,0 +1,18 @@
+{
+  "name": "ovkgramm",
+  "version": "1.0.0",
+  "description": "Реальный мессенджер OVKGRAMM",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["messenger", "chat", "websocket"],
+  "author": "OVKGRAMM",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.13.0",
+    "cors": "^2.8.5"
+  }
+}

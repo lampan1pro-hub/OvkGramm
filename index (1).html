@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OVKGRAMM - Реальный мессенджер</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0084ff;
+            --primary-dark: #0066cc;
+            --primary-light: #e7f3ff;
+            --bg-dark: #fff;
+            --bg-light: #f0f2f5;
+            --text-primary: #000;
+            --text-secondary: #65676b;
+            --border-color: #e5e5ea;
+            --success: #31a24c;
+            --online: #31a24c;
+            --offline: #999;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg-light);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .app {
+            display: flex;
+            height: 100vh;
+            background: var(--bg-dark);
+        }
+
+        /* AUTH SCREEN */
+        .auth-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%);
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .auth-logo {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .auth-tagline {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            margin-bottom: 12px;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--bg-light);
+            color: var(--primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary-light);
+        }
+
+        .toggle-text {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .toggle-text button {
+            background: none;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 8px;
+            padding: 8px;
+            background: #ffe0e0;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        /* MAIN APP */
+        .main-app {
+            display: flex;
+            width: 100%;
+            gap: 0;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 360px;
+            background: var(--bg-dark);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-title {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        .header-icons {
+            display: flex;
+            gap: 8px;
+            position: relative;
+        }
+
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--bg-light);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: background 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .search-container {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            background: var(--bg-light);
+            font-size: 15px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            background: white;
+            border-color: var(--primary);
+        }
+
+        .user-list {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .user-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+            transition: all 0.2s;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-item:hover {
+            background: var(--bg-light);
+        }
+
+        .user-item.active {
+            background: var(--primary-light);
+            border-left-color: var(--primary);
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .user-status {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .user-status.online {
+            color: var(--online);
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 4px;
+        }
+
+        .status-dot.online {
+            background: var(--online);
+        }
+
+        .status-dot.offline {
+            background: var(--offline);
+        }
+
+        /* CHAT AREA */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-dark);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header-info h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .chat-header-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: var(--bg-dark);
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 8px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.sent {
+            justify-content: flex-end;
+        }
+
+        .message.received {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 60%;
+            padding: 8px 12px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            font-size: 15px;
+            line-height: 1.4;
+        }
+
+        .message.sent .message-bubble {
+            background: var(--primary);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.received .message-bubble {
+            background: var(--bg-light);
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            padding: 0 4px;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        /* INPUT AREA */
+        .input-area {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 12px;
+            background: var(--bg-dark);
+        }
+
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            gap: 8px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 15px;
+            font-family: inherit;
+            resize: none;
+            max-height: 100px;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .send-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .send-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* PROFILE MENU */
+        .profile-menu {
+            position: absolute;
+            top: 50px;
+            right: 0;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            min-width: 200px;
+            overflow: hidden;
+        }
+
+        .profile-menu-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .profile-menu-item:last-child {
+            border-bottom: none;
+        }
+
+        .profile-menu-item:hover {
+            background: var(--bg-light);
+        }
+
+        .profile-menu-item.logout {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        .no-chat {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: var(--bg-light);
+        }
+
+        .no-chat-content {
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .no-chat-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .connection-status {
+            padding: 8px 12px;
+            background: #fff3cd;
+            color: #856404;
+            font-size: 12px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .connection-status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                position: absolute;
+                height: 100%;
+                z-index: 50;
+            }
+
+            .chat-area {
+                width: 100%;
+            }
+
+            .message-bubble {
+                max-width: 80%;
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="app" id="app"></div>
+
+    <script>
+        const API_URL = `${window.location.origin}`;
+        let ws = null;
+        let isConnected = false;
+
+        class OVKGramm {
+            constructor() {
+                this.currentUser = null;
+                this.selectedUserId = null;
+                this.allUsers = [];
+                this.chats = new Map();
+                this.showProfileMenu = false;
+                this.searchQuery = '';
+                this.init();
+            }
+
+            async init() {
+                this.loadState();
+                this.render();
+                this.setupWebSocket();
+            }
+
+            loadState() {
+                const saved = localStorage.getItem('ovkgramm_user');
+                if (saved) {
+                    this.currentUser = JSON.parse(saved);
+                }
+            }
+
+            saveState() {
+                if (this.currentUser) {
+                    localStorage.setItem('ovkgramm_user', JSON.stringify(this.currentUser));
+                }
+            }
+
+            setupWebSocket() {
+                if (!this.currentUser) return;
+
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}`;
+                
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    isConnected = true;
+                    ws.send(JSON.stringify({
+                        type: 'connect',
+                        userId: this.currentUser.id,
+                        username: this.currentUser.username
+                    }));
+                    this.render();
+                };
+
+                ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    this.handleWebSocketMessage(message);
+                };
+
+                ws.onclose = () => {
+                    isConnected = false;
+                    this.render();
+                    setTimeout(() => this.setupWebSocket(), 3000);
+                };
+            }
+
+            handleWebSocketMessage(message) {
+                switch (message.type) {
+                    case 'message':
+                        this.addMessageToChat(message.data);
+                        break;
+                    case 'userStatus':
+                        this.updateUserStatus(message.data);
+                        break;
+                }
+            }
+
+            addMessageToChat(messageData) {
+                const chatId = messageData.chatId;
+                if (!this.chats.has(chatId)) {
+                    this.chats.set(chatId, []);
+                }
+                const messages = this.chats.get(chatId);
+                messages.push(messageData);
+                this.render();
+            }
+
+            updateUserStatus(onlineUsers) {
+                this.allUsers = this.allUsers.map(user => {
+                    const online = onlineUsers.find(u => u.userId === user.id);
+                    return {
+                        ...user,
+                        status: online ? 'online' : 'offline'
+                    };
+                });
+                this.render();
+            }
+
+            async register(username, email, password) {
+                try {
+                    const res = await fetch(`${API_URL}/api/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, email, password })
+                    });
+
+                    const data = await res.json();
+                    if (res.ok) {
+                        this.currentUser = data.user;
+                        this.saveState();
+                        this.loadUsers();
+                        return true;
+                    } else {
+                        alert(data.error || 'Registration failed');
+                        return false;
+                    }
+                } catch (err) {
+                    alert('Connection error: ' + err.message);
+                    return false;
+                }
+            }
+
+            async login(email, password) {
+                try {
+                    const res = await fetch(`${API_URL}/api/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    const data = await res.json();
+                    if (res.ok) {
+                        this.currentUser = data.user;
+                        this.saveState();
+                        this.loadUsers();
+                        return true;
+                    } else {
+                        alert(data.error || 'Login failed');
+                        return false;
+                    }
+                } catch (err) {
+                    alert('Connection error: ' + err.message);
+                    return false;
+                }
+            }
+
+            async loadUsers() {
+                try {
+                    const res = await fetch(`${API_URL}/api/users`);
+                    this.allUsers = await res.json();
+                    this.allUsers = this.allUsers.filter(u => u.id !== this.currentUser.id);
+                    this.render();
+                } catch (err) {
+                    console.error('Error loading users:', err);
+                }
+            }
+
+            async startChat(userId) {
+                try {
+                    const res = await fetch(`${API_URL}/api/chats`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId1: this.currentUser.id,
+                            userId2: userId
+                        })
+                    });
+
+                    const chat = await res.json();
+                    this.selectedUserId = userId;
+                    await this.loadMessages(chat.id);
+                    this.render();
+                } catch (err) {
+                    console.error('Error starting chat:', err);
+                }
+            }
+
+            async loadMessages(chatId) {
+                try {
+                    const res = await fetch(`${API_URL}/api/messages/${chatId}`);
+                    const messages = await res.json();
+                    this.chats.set(chatId, messages);
+                    this.render();
+                } catch (err) {
+                    console.error('Error loading messages:', err);
+                }
+            }
+
+            sendMessage(text) {
+                if (!text.trim() || !this.selectedUserId || !ws || !isConnected) {
+                    alert('Cannot send message. Check connection.');
+                    return;
+                }
+
+                const selectedUser = this.allUsers.find(u => u.id === this.selectedUserId);
+                const chatKey = [this.currentUser.id, this.selectedUserId].sort().join('-');
+
+                ws.send(JSON.stringify({
+                    type: 'message',
+                    chatId: chatKey,
+                    senderId: this.currentUser.id,
+                    text: text.trim()
+                }));
+            }
+
+            logout() {
+                this.currentUser = null;
+                this.selectedUserId = null;
+                this.chats.clear();
+                localStorage.removeItem('ovkgramm_user');
+                if (ws) ws.close();
+                this.render();
+            }
+
+            toggleMenu() {
+                this.showProfileMenu = !this.showProfileMenu;
+                this.render();
+            }
+
+            render() {
+                const app = document.getElementById('app');
+
+                if (!this.currentUser) {
+                    app.innerHTML = this.renderAuth();
+                    this.attachAuthListeners();
+                } else {
+                    app.innerHTML = this.renderMainApp();
+                    this.attachMainListeners();
+                }
+            }
+
+            renderAuth() {
+                return `
+                    <div class="auth-screen">
+                        <div class="auth-card">
+                            <div class="auth-logo">OVKGRAMM</div>
+                            <div class="auth-tagline">Реальное общение с друзьями</div>
+                            <form id="auth-form">
+                                <div id="auth-fields">
+                                    <div class="form-group">
+                                        <label>Имя пользователя</label>
+                                        <input type="text" id="username" required placeholder="Ваше имя">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Email</label>
+                                        <input type="email" id="email" required placeholder="your@email.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Пароль</label>
+                                        <input type="password" id="password" required placeholder="Минимум 6 символов">
+                                    </div>
+                                </div>
+                                <div id="error-message" class="error"></div>
+                                <button type="button" class="btn btn-primary" id="auth-btn">Регистрация</button>
+                            </form>
+                            <div class="toggle-text">
+                                Уже есть аккаунт? <button id="toggle-auth" type="button">Вход</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderMainApp() {
+                const filteredUsers = this.allUsers.filter(u =>
+                    u.username.toLowerCase().includes(this.searchQuery.toLowerCase())
+                );
+
+                return `
+                    <div class="main-app">
+                        <div class="sidebar">
+                            <div class="sidebar-header">
+                                <div class="sidebar-title">OVKGRAMM</div>
+                                <div class="header-icons">
+                                    <button class="icon-btn" id="profile-btn" title="Профиль">👤</button>
+                                </div>
+                            </div>
+                            ${!isConnected ? '<div class="connection-status">⚠️ Нет подключения</div>' : '<div class="connection-status connected">✓ Подключено</div>'}
+                            <div class="search-container">
+                                <input type="text" class="search-box" id="search-input" placeholder="Поиск пользователей...">
+                            </div>
+                            <div class="user-list">
+                                ${filteredUsers.map(user => `
+                                    <div class="user-item ${this.selectedUserId === user.id ? 'active' : ''}" data-user-id="${user.id}">
+                                        <div class="user-info">
+                                            <div class="user-name">${user.username}</div>
+                                            <div class="user-status ${user.status}">
+                                                <span class="status-dot ${user.status}"></span>
+                                                ${user.status === 'online' ? 'Онлайн' : 'Оффлайн'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="chat-area">
+                            ${this.selectedUserId ? this.renderChat() : this.renderNoChat()}
+                        </div>
+                    </div>
+
+                    ${this.showProfileMenu ? this.renderProfileMenu() : ''}
+                `;
+            }
+
+            renderChat() {
+                const user = this.allUsers.find(u => u.id === this.selectedUserId);
+                if (!user) return '';
+
+                const chatKey = [this.currentUser.id, this.selectedUserId].sort().join('-');
+                const messages = this.chats.get(chatKey) || [];
+
+                return `
+                    <div class="chat-header">
+                        <div class="chat-header-info">
+                            <h2>${user.username}</h2>
+                            <p class="user-status ${user.status}">
+                                <span class="status-dot ${user.status}"></span>
+                                ${user.status === 'online' ? 'Онлайн' : 'Оффлайн'}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="messages-container">
+                        ${messages.length === 0 ? '<div class="empty-state"><div class="empty-state-icon">💬</div><p>Нет сообщений. Начни разговор!</p></div>' : ''}
+                        ${messages.map(msg => `
+                            <div class="message ${msg.senderId === this.currentUser.id ? 'sent' : 'received'}">
+                                <div>
+                                    <div class="message-bubble">${this.escapeHtml(msg.text)}</div>
+                                    <div class="message-time">${new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="input-area">
+                        <div class="input-wrapper">
+                            <input type="text" class="message-input" id="message-input" placeholder="Сообщение..." ${!isConnected ? 'disabled' : ''}>
+                        </div>
+                        <button class="send-btn" id="send-btn" ${!isConnected ? 'disabled' : ''}>➤</button>
+                    </div>
+                `;
+            }
+
+            renderNoChat() {
+                return `
+                    <div class="no-chat">
+                        <div class="no-chat-content">
+                            <div class="no-chat-icon">💬</div>
+                            <h2>Выберите контакт</h2>
+                            <p>Начните переписку со списка слева</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderProfileMenu() {
+                return `
+                    <div class="profile-menu">
+                        <div class="profile-menu-item">👤 ${this.currentUser.username}</div>
+                        <div class="profile-menu-item">${this.currentUser.email}</div>
+                        <div class="profile-menu-item logout" id="logout-btn">Выход</div>
+                    </div>
+                `;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            attachAuthListeners() {
+                const form = document.getElementById('auth-form');
+                const authBtn = document.getElementById('auth-btn');
+                const toggleBtn = document.getElementById('toggle-auth');
+                const errorMsg = document.getElementById('error-message');
+                let isRegister = true;
+
+                toggleBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    isRegister = !isRegister;
+                    authBtn.textContent = isRegister ? 'Регистрация' : 'Вход';
+                    toggleBtn.textContent = isRegister ? 'Вход' : 'Регистрация';
+                    const userField = document.getElementById('username').parentElement;
+                    userField.style.display = isRegister ? 'block' : 'none';
+                });
+
+                authBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    errorMsg.classList.remove('show');
+                    
+                    const email = document.getElementById('email').value;
+                    const password = document.getElementById('password').value;
+
+                    if (isRegister) {
+                        const username = document.getElementById('username').value;
+                        if (!username) {
+                            errorMsg.textContent = 'Заполните все поля';
+                            errorMsg.classList.add('show');
+                            return;
+                        }
+                        if (await this.register(username, email, password)) {
+                            this.init();
+                        }
+                    } else {
+                        if (await this.login(email, password)) {
+                            this.init();
+                        }
+                    }
+                });
+            }
+
+            attachMainListeners() {
+                // User selection
+                document.querySelectorAll('.user-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const userId = parseInt(item.dataset.userId);
+                        this.startChat(userId);
+                    });
+                });
+
+                // Search
+                const searchInput = document.getElementById('search-input');
+                if (searchInput) {
+                    searchInput.addEventListener('input', (e) => {
+                        this.searchQuery = e.target.value;
+                        this.render();
+                    });
+                }
+
+                // Message sending
+                const messageInput = document.getElementById('message-input');
+                const sendBtn = document.getElementById('send-btn');
+
+                if (sendBtn) {
+                    sendBtn.addEventListener('click', () => {
+                        this.sendMessage(messageInput.value);
+                        messageInput.value = '';
+                        messageInput.focus();
+                    });
+                }
+
+                if (messageInput) {
+                    messageInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            this.sendMessage(messageInput.value);
+                            messageInput.value = '';
+                        }
+                    });
+                }
+
+                // Profile menu
+                const profileBtn = document.getElementById('profile-btn');
+                if (profileBtn) {
+                    profileBtn.addEventListener('click', () => this.toggleMenu());
+                }
+
+                const logoutBtn = document.getElementById('logout-btn');
+                if (logoutBtn) {
+                    logoutBtn.addEventListener('click', () => this.logout());
+                }
+
+                // Auto scroll
+                setTimeout(() => {
+                    const container = document.querySelector('.messages-container');
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                }, 0);
+            }
+        }
+
+        const app = new OVKGramm();
+    </script>
+</body>
+</html>
