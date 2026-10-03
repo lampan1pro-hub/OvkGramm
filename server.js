@@ -4,434 +4,272 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.static(__dirname));
+app.use(express.json({ limit: '1mb' }));
+// Раздаём только страницу, а не всю папку: раньше data/users.json был доступен по ссылке
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-// Database files
-const usersFile = path.join(__dirname, 'data/users.json');
-const messagesFile = path.join(__dirname, 'data/messages.json');
-const chatsFile = path.join(__dirname, 'data/chats.json');
+// ---------- Хранилище ----------
+const DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DIR)) fs.mkdirSync(DIR);
+const F = {
+    users: path.join(DIR, 'users.json'),
+    messages: path.join(DIR, 'messages.json'),
+    chats: path.join(DIR, 'chats.json')
+};
+const read = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return []; } };
+const write = (f, d) => fs.writeFileSync(f, JSON.stringify(d, null, 2));
 
-// Ensure data directory exists
-if (!fs.existsSync(path.join(__dirname, 'data'))) {
-    fs.mkdirSync(path.join(__dirname, 'data'));
-}
+const directId = (a, b) => `d_${Math.min(a, b)}_${Math.max(a, b)}`;
+const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
-// Initialize data files
-function initData() {
-    if (!fs.existsSync(usersFile)) {
-        fs.writeFileSync(usersFile, JSON.stringify([]));
-    }
-    if (!fs.existsSync(messagesFile)) {
-        fs.writeFileSync(messagesFile, JSON.stringify([]));
-    }
-    if (!fs.existsSync(chatsFile)) {
-        fs.writeFileSync(chatsFile, JSON.stringify([]));
-    }
-}
+// Пароли: scrypt. Старые пароли (открытым текстом) принимаются и сразу заменяются на хэш
+const hashPass = (p, salt = crypto.randomBytes(8).toString('hex')) =>
+    `${salt}:${crypto.scryptSync(p, salt, 32).toString('hex')}`;
+const isHash = s => /^[0-9a-f]{16}:[0-9a-f]{64}$/.test(s);
+const checkPass = (p, stored) => isHash(stored) ? hashPass(p, stored.split(':')[0]) === stored : p === stored;
 
-// Read/Write helpers
-function readUsers() {
-    try {
-        return JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-    } catch {
-        return [];
-    }
-}
+// Миграция старых данных: юзернеймы, единый формат чатов и сообщений
+(function migrate() {
+    const users = read(F.users);
+    users.forEach(u => { if (!u.handle) u.handle = 'user' + String(u.id).slice(-6); });
+    write(F.users, users);
 
-function writeUsers(users) {
-    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-}
-
-function readMessages() {
-    try {
-        return JSON.parse(fs.readFileSync(messagesFile, 'utf8'));
-    } catch {
-        return [];
-    }
-}
-
-function writeMessages(messages) {
-    fs.writeFileSync(messagesFile, JSON.stringify(messages, null, 2));
-}
-
-function readChats() {
-    try {
-        return JSON.parse(fs.readFileSync(chatsFile, 'utf8'));
-    } catch {
-        return [];
-    }
-}
-
-function writeChats(chats) {
-    fs.writeFileSync(chatsFile, JSON.stringify(chats, null, 2));
-}
-
-// Store connected users
-const connectedUsers = new Map();
-
-// Initialize
-initData();
-
-// REST API Routes
-
-// Register
-app.post('/api/register', (req, res) => {
-    const { username, email, password } = req.body;
-
-    if (!username || !email || !password) {
-        return res.status(400).json({ error: 'All fields required' });
-    }
-
-    const users = readUsers();
-    
-    if (users.find(u => u.email === email)) {
-        return res.status(400).json({ error: 'Email already exists' });
-    }
-
-    const newUser = {
-        id: Date.now(),
-        username,
-        email,
-        password, // In production, hash this!
-        bio: '',
-        avatar: '',
-        createdAt: new Date().toISOString()
-    };
-
-    users.push(newUser);
-    writeUsers(users);
-
-    res.json({ 
-        success: true, 
-        user: { 
-            id: newUser.id, 
-            username: newUser.username, 
-            email: newUser.email,
-            bio: newUser.bio,
-            avatar: newUser.avatar
-        } 
-    });
-});
-
-// Login
-app.post('/api/login', (req, res) => {
-    const { email, password } = req.body;
-    const users = readUsers();
-    
-    const user = users.find(u => u.email === email && u.password === password);
-    
-    if (!user) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    res.json({ 
-        success: true, 
-        user: { 
-            id: user.id, 
-            username: user.username, 
-            email: user.email,
-            bio: user.bio || '',
-            avatar: user.avatar || ''
-        } 
-    });
-});
-
-// Get all users
-app.get('/api/users', (req, res) => {
-    const users = readUsers();
-    const onlineUsers = Array.from(connectedUsers.values());
-    
-    res.json(users.map(u => ({
-        id: u.id,
-        username: u.username,
-        email: u.email,
-        bio: u.bio || '',
-        avatar: u.avatar || '',
-        status: onlineUsers.some(ou => ou.userId === u.id) ? 'online' : 'offline'
-    })));
-});
-
-// Search users by username
-app.get('/api/users/search/:query', (req, res) => {
-    const { query } = req.params;
-    const users = readUsers();
-    const onlineUsers = Array.from(connectedUsers.values());
-    
-    const results = users.filter(u => 
-        u.username.toLowerCase().includes(query.toLowerCase())
-    ).map(u => ({
-        id: u.id,
-        username: u.username,
-        email: u.email,
-        bio: u.bio || '',
-        avatar: u.avatar || '',
-        status: onlineUsers.some(ou => ou.userId === u.id) ? 'online' : 'offline'
-    }));
-    
-    res.json(results);
-});
-
-// Get user profile
-app.get('/api/profile/:userId', (req, res) => {
-    const { userId } = req.params;
-    const users = readUsers();
-    const onlineUsers = Array.from(connectedUsers.values());
-    
-    const user = users.find(u => u.id === parseInt(userId));
-    
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-    }
-    
-    res.json({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        bio: user.bio || '',
-        avatar: user.avatar || '',
-        createdAt: user.createdAt,
-        status: onlineUsers.some(ou => ou.userId === user.id) ? 'online' : 'offline'
-    });
-});
-
-// Update user profile
-app.put('/api/profile/:userId', (req, res) => {
-    const { userId } = req.params;
-    const { username, bio, avatar } = req.body;
-    const users = readUsers();
-    
-    const user = users.find(u => u.id === parseInt(userId));
-    
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-    }
-    
-    if (username) user.username = username;
-    if (bio !== undefined) user.bio = bio;
-    if (avatar !== undefined) user.avatar = avatar;
-    
-    writeUsers(users);
-    
-    res.json({
-        success: true,
-        user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            bio: user.bio || '',
-            avatar: user.avatar || ''
+    let chats = read(F.chats).map(c => c.type ? c :
+        { id: directId(...c.participants), type: 'direct', members: c.participants, createdAt: c.createdAt });
+    const msgs = read(F.messages);
+    msgs.forEach(m => {
+        if (typeof m.chatId === 'string' && /^\d+-\d+$/.test(m.chatId)) {
+            const [a, b] = m.chatId.split('-').map(Number);
+            m.chatId = directId(a, b);
+            if (!chats.some(c => c.id === m.chatId))
+                chats.push({ id: m.chatId, type: 'direct', members: [a, b], createdAt: m.timestamp });
         }
     });
-});
+    write(F.messages, msgs);
+    write(F.chats, chats);
+})();
 
-// Create group chat
-app.post('/api/groups', (req, res) => {
-    const { userId, groupName, members } = req.body;
-    
-    if (!groupName || !Array.isArray(members)) {
-        return res.status(400).json({ error: 'Group name and members required' });
+// ---------- Онлайн ----------
+const sockets = new Map(); // userId -> Set<ws>
+
+const pub = u => ({
+    id: u.id, username: u.username, handle: u.handle, bio: u.bio || '',
+    createdAt: u.createdAt, online: sockets.has(u.id)
+});
+const self = u => ({ ...pub(u), email: u.email });
+
+function sendTo(ids, payload, exceptWs) {
+    const json = JSON.stringify(payload);
+    ids.forEach(id => sockets.get(id)?.forEach(s => {
+        if (s !== exceptWs && s.readyState === WebSocket.OPEN) s.send(json);
+    }));
+}
+function broadcast(payload) {
+    const json = JSON.stringify(payload);
+    wss.clients.forEach(s => s.readyState === WebSocket.OPEN && s.send(json));
+}
+
+// Чат в виде, удобном клиенту
+function shape(chat, me, users, msgs) {
+    const byId = id => users.find(u => u.id === id);
+    let last = null;
+    for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].chatId === chat.id) { last = msgs[i]; break; }
+    const o = { id: chat.id, type: chat.type, name: chat.name, creator: chat.creator, createdAt: chat.createdAt, last };
+    if (chat.type === 'direct') {
+        const p = byId(chat.members.find(i => i !== me));
+        o.peer = p ? pub(p) : null;
+    } else {
+        o.members = chat.members.map(byId).filter(Boolean).map(pub);
     }
-    
-    const chats = readChats();
-    const users = readUsers();
-    
-    const newGroup = {
-        id: Date.now(),
-        type: 'group',
-        name: groupName,
-        creator: userId,
-        members: [userId, ...members],
-        createdAt: new Date().toISOString()
+    return o;
+}
+
+// ---------- Авторизация ----------
+app.post('/api/register', (req, res) => {
+    const username = String(req.body.username || '').trim().slice(0, 40);
+    const handle = String(req.body.handle || '').trim().replace(/^@/, '').toLowerCase();
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+
+    if (!username || !email || !password) return res.status(400).json({ error: 'Заполните все поля' });
+    if (!email.includes('@')) return res.status(400).json({ error: 'Введите корректный email' });
+    if (password.length < 6) return res.status(400).json({ error: 'Пароль — минимум 6 символов' });
+    if (!HANDLE_RE.test(handle)) return res.status(400).json({ error: 'Юзернейм: 3–20 символов, латиница, цифры и _' });
+
+    const users = read(F.users);
+    if (users.some(u => u.email === email)) return res.status(400).json({ error: 'Этот email уже зарегистрирован' });
+    if (users.some(u => u.handle === handle)) return res.status(400).json({ error: 'Этот юзернейм уже занят' });
+
+    const user = {
+        id: Date.now(), username, handle, email, password: hashPass(password),
+        bio: '', createdAt: new Date().toISOString()
     };
-    
-    chats.push(newGroup);
-    writeChats(chats);
-    
-    res.json({ success: true, group: newGroup });
+    users.push(user);
+    write(F.users, users);
+    res.json({ success: true, user: self(user) });
 });
 
-// Get groups for user
-app.get('/api/groups/:userId', (req, res) => {
-    const { userId } = req.params;
-    const chats = readChats();
-    
-    const groups = chats.filter(c => 
-        c.type === 'group' && c.members.includes(parseInt(userId))
-    );
-    
-    res.json(groups);
+app.post('/api/login', (req, res) => {
+    const login = String(req.body.email || '').trim().toLowerCase().replace(/^@/, '');
+    const password = String(req.body.password || '');
+    const users = read(F.users);
+    const user = users.find(u => (u.email === login || u.handle === login) && checkPass(password, u.password));
+    if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
+    if (!isHash(user.password)) { user.password = hashPass(password); write(F.users, users); }
+    res.json({ success: true, user: self(user) });
 });
 
-// Get chats for user
-app.get('/api/chats/:userId', (req, res) => {
-    const { userId } = req.params;
-    const messages = readMessages();
-    const chats = readChats();
-    
-    const userChats = chats.filter(c => c.participants.includes(parseInt(userId)));
-    
-    const chatsWithMessages = userChats.map(chat => {
-        const chatMessages = messages.filter(m => m.chatId === chat.id);
-        return {
-            ...chat,
-            lastMessage: chatMessages[chatMessages.length - 1] || null,
-            messageCount: chatMessages.length
-        };
-    });
-
-    res.json(chatsWithMessages);
+// ---------- Пользователи ----------
+// Поиск по имени и @юзернейму; пустой запрос — первые 30 человек
+app.get('/api/users/search', (req, res) => {
+    const s = String(req.query.q || '').toLowerCase().replace(/^@/, '');
+    const me = Number(req.query.userId);
+    res.json(read(F.users)
+        .filter(u => u.id !== me && (u.handle.includes(s) || u.username.toLowerCase().includes(s)))
+        .slice(0, 30).map(pub));
 });
 
-// Get messages for chat
-app.get('/api/messages/:chatId', (req, res) => {
-    const { chatId } = req.params;
-    const messages = readMessages();
-    
-    const chatMessages = messages.filter(m => m.chatId === parseInt(chatId));
-    res.json(chatMessages);
+app.get('/api/profile/:id', (req, res) => {
+    const u = read(F.users).find(x => x.id === Number(req.params.id));
+    if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
+    res.json(pub(u));
 });
 
-// Create or get chat
-app.post('/api/chats', (req, res) => {
-    const { userId1, userId2 } = req.body;
-    const chats = readChats();
-    const users = readUsers();
-    
-    // Find existing chat
-    let chat = chats.find(c => 
-        (c.participants.includes(userId1) && c.participants.includes(userId2))
-    );
+app.put('/api/profile/:id', (req, res) => {
+    const users = read(F.users);
+    const u = users.find(x => x.id === Number(req.params.id));
+    if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
 
-    if (!chat) {
-        // Create new chat
-        const user1 = users.find(u => u.id === userId1);
-        const user2 = users.find(u => u.id === userId2);
-        
-        chat = {
-            id: Date.now(),
-            participants: [userId1, userId2],
-            participantNames: [user1?.username, user2?.username],
-            createdAt: new Date().toISOString()
-        };
-        
-        chats.push(chat);
-        writeChats(chats);
+    const { username, handle, bio } = req.body;
+    if (username !== undefined) {
+        const n = String(username).trim().slice(0, 40);
+        if (!n) return res.status(400).json({ error: 'Имя не может быть пустым' });
+        u.username = n;
     }
+    if (handle !== undefined) {
+        const h = String(handle).trim().replace(/^@/, '').toLowerCase();
+        if (!HANDLE_RE.test(h)) return res.status(400).json({ error: 'Юзернейм: 3–20 символов, латиница, цифры и _' });
+        if (users.some(x => x.id !== u.id && x.handle === h)) return res.status(400).json({ error: 'Этот юзернейм уже занят' });
+        u.handle = h;
+    }
+    if (bio !== undefined) u.bio = String(bio).slice(0, 200);
 
-    res.json(chat);
+    write(F.users, users);
+    broadcast({ type: 'chat' }); // у всех обновятся имена в списках
+    res.json({ success: true, user: self(u) });
 });
 
-// WebSocket handling
-wss.on('connection', (ws) => {
-    let userId = null;
+// ---------- Чаты ----------
+app.get('/api/chats/:userId', (req, res) => {
+    const me = Number(req.params.userId);
+    const users = read(F.users);
+    const msgs = read(F.messages);
+    const ts = c => new Date(c.last ? c.last.timestamp : c.createdAt || 0).getTime();
+    res.json(read(F.chats)
+        .filter(c => c.members.includes(me))
+        .map(c => shape(c, me, users, msgs))
+        .sort((a, b) => ts(b) - ts(a)));
+});
 
-    ws.on('message', (data) => {
+app.post('/api/chats', (req, res) => {
+    const me = Number(req.body.userId), peer = Number(req.body.peerId);
+    const users = read(F.users);
+    if (me === peer || !users.some(u => u.id === me) || !users.some(u => u.id === peer))
+        return res.status(400).json({ error: 'Пользователь не найден' });
+
+    const chats = read(F.chats);
+    let chat = chats.find(c => c.id === directId(me, peer));
+    if (!chat) {
+        chat = { id: directId(me, peer), type: 'direct', members: [me, peer], createdAt: new Date().toISOString() };
+        chats.push(chat);
+        write(F.chats, chats);
+    }
+    res.json(shape(chat, me, users, read(F.messages)));
+});
+
+app.post('/api/groups', (req, res) => {
+    const me = Number(req.body.userId);
+    const name = String(req.body.name || '').trim().slice(0, 40);
+    const users = read(F.users);
+    const others = [...new Set((req.body.members || []).map(Number))]
+        .filter(id => id !== me && users.some(u => u.id === id));
+    if (!name || !others.length) return res.status(400).json({ error: 'Введите название и выберите участников' });
+
+    const chats = read(F.chats);
+    const group = {
+        id: 'g_' + Date.now(), type: 'group', name, creator: me,
+        members: [me, ...others], createdAt: new Date().toISOString()
+    };
+    chats.push(group);
+    write(F.chats, chats);
+    sendTo(others, { type: 'chat' });
+    res.json(shape(group, me, users, []));
+});
+
+app.get('/api/messages/:chatId', (req, res) => {
+    const me = Number(req.query.userId);
+    const chat = read(F.chats).find(c => String(c.id) === req.params.chatId);
+    if (!chat || !chat.members.includes(me)) return res.status(403).json({ error: 'Нет доступа' });
+    res.json(read(F.messages).filter(m => m.chatId === chat.id).slice(-500));
+});
+
+// ---------- WebSocket ----------
+wss.on('connection', ws => {
+    let uid = null;
+
+    ws.on('message', raw => {
         try {
-            const message = JSON.parse(data);
+            const m = JSON.parse(raw);
 
-            switch (message.type) {
-                case 'connect':
-                    userId = message.userId;
-                    connectedUsers.set(ws, {
-                        userId,
-                        username: message.username,
-                        ws
-                    });
-                    broadcastUserStatus();
-                    break;
+            if (m.type === 'connect') {
+                uid = Number(m.userId);
+                if (!sockets.has(uid)) sockets.set(uid, new Set());
+                sockets.get(uid).add(ws);
+                broadcast({ type: 'presence', data: { userId: uid, online: true } });
+                return;
+            }
+            if (!uid) return;
 
-                case 'message':
-                    handleMessage(message);
-                    break;
+            const chat = read(F.chats).find(c => String(c.id) === String(m.chatId));
+            if (!chat || !chat.members.includes(uid)) return;
 
-                case 'typing':
-                    broadcastTyping(message);
-                    break;
+            if (m.type === 'message') {
+                const text = String(m.text || '').trim().slice(0, 4000);
+                if (!text) return;
+                const msg = {
+                    id: crypto.randomUUID(), chatId: chat.id, senderId: uid,
+                    text, timestamp: new Date().toISOString()
+                };
+                const msgs = read(F.messages);
+                msgs.push(msg);
+                write(F.messages, msgs);
+                sendTo(chat.members, { type: 'message', data: msg }); // только участникам чата
+            } else if (m.type === 'typing') {
+                sendTo(chat.members, { type: 'typing', data: { chatId: chat.id, userId: uid } }, ws);
             }
         } catch (err) {
-            console.error('Error:', err);
+            console.error('WS error:', err);
         }
     });
 
     ws.on('close', () => {
-        if (userId) {
-            connectedUsers.delete(ws);
-            broadcastUserStatus();
+        if (!uid || !sockets.has(uid)) return;
+        sockets.get(uid).delete(ws);
+        if (!sockets.get(uid).size) {
+            sockets.delete(uid);
+            broadcast({ type: 'presence', data: { userId: uid, online: false } });
         }
     });
 });
 
-function handleMessage(messageData) {
-    const { chatId, senderId, text } = messageData;
-    
-    const message = {
-        id: Date.now(),
-        chatId,
-        senderId,
-        text,
-        timestamp: new Date().toISOString()
-    };
-
-    // Save to file
-    const messages = readMessages();
-    messages.push(message);
-    writeMessages(messages);
-
-    // Broadcast to all connected users
-    const messageJson = JSON.stringify({
-        type: 'message',
-        data: message
-    });
-
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(messageJson);
-        }
-    });
-}
-
-function broadcastTyping(typingData) {
-    const json = JSON.stringify({
-        type: 'typing',
-        data: typingData
-    });
-
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(json);
-        }
-    });
-}
-
-function broadcastUserStatus() {
-    const onlineUsers = Array.from(connectedUsers.values()).map(u => ({
-        userId: u.userId,
-        username: u.username
-    }));
-
-    const json = JSON.stringify({
-        type: 'userStatus',
-        data: onlineUsers
-    });
-
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(json);
-        }
-    });
-}
-
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`🚀 OVKGRAMM сервер запущен на http://localhost:${PORT}`);
-    console.log(`📱 Открой http://localhost:${PORT} в браузере`);
+    console.log(`🚀 OVKGRAMM запущен: http://localhost:${PORT}`);
 });
