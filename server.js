@@ -194,6 +194,17 @@ function migrate() {
         c.reads = {};
         c.members.forEach(id => { c.reads[id] = last ? last.timestamp : ''; });
     });
+    // Подарки, купленные до появления фонов, получают случайный фон (и в сообщениях тоже)
+    const gifts = read(F.gifts);
+    let gch = false;
+    gifts.forEach(g => { if (!g.bd) { g.bd = pickBackdrop().id; gch = true; } });
+    msgs.forEach(m => {
+        if (m.gift && !m.gift.bd) {
+            const g = gifts.find(x => x.kind === m.gift.kind && x.serial === m.gift.serial);
+            if (g) m.gift.bd = g.bd;
+        }
+    });
+    if (gch) write(F.gifts, gifts);
     write(F.messages, msgs);
     write(F.chats, chats);
 }
@@ -564,19 +575,25 @@ app.post('/api/channels/:id/leave', (req, res) => {
 });
 
 
-// ---------- Бот ЮЗ (@nakrytka_bot): накрутка подписчиков ----------
+// ---------- Бот НАКРУТКА БОТ (@nakrytka_bot): накрутка подписчиков ----------
 // Пользователь выбирает свой канал и пакет, платит Mars, а в канал добавляются подписчики с случайными никами.
 const BOT_ID = 100;                       // id пользователей — Date.now(), так что не пересекается
 const BOT_HANDLE = 'nakrytka_bot';
+const BOT_NAME = 'НАКРУТКА БОТ';
+const MAX_CUSTOM = Number(process.env.MAX_SUBS) || 10000;   // максимум за один заказ своего количества
 const SUB_PRICE = Number(process.env.SUB_PRICE) || 3;      // Mars за одного подписчика
 const PACKS = [10, 50, 100, 500, 1000];                    // доступные пакеты
 VERIFIED.add(BOT_HANDLE);
 
 function ensureBot() {
     const users = read(F.users);
-    if (users.some(u => u.id === BOT_ID)) return;
+    const old = users.find(u => u.id === BOT_ID);
+    if (old) { // переименование уже созданного бота
+        if (old.username !== BOT_NAME) { old.username = BOT_NAME; write(F.users, users); }
+        return;
+    }
     users.push({
-        id: BOT_ID, username: 'ЮЗ', handle: BOT_HANDLE, bot: true, bio: 'Накрутка подписчиков на ваш канал',
+        id: BOT_ID, username: BOT_NAME, handle: BOT_HANDLE, bot: true, bio: 'Накрутка подписчиков на ваш канал',
         avatar: '', mars: 0, password: 'x' + crypto.randomBytes(24).toString('hex'), createdAt: new Date().toISOString()
     });
     write(F.users, users);
@@ -646,16 +663,26 @@ const subWord = n => { const m = n % 100, d = n % 10; return m > 10 && m < 15 ? 
 function menuFor(uid) {
     const mine = read(F.chats).filter(c => c.type === 'channel' && c.creator === uid);
     if (!mine.length) {
-        return say(uid, '👋 Привет! Я ЮЗ — накручиваю подписчиков на каналы.\n\nУ вас пока нет своего канала. Создайте канал и нажмите «Старт» снова.', [[btn('🔄 Проверить снова', 'start')]]);
+        return say(uid, '👋 Привет! Я НАКРУТКА БОТ — накручиваю подписчиков на каналы.\n\nУ вас пока нет своего канала. Создайте канал и нажмите «Старт» снова.', [[btn('🔄 Проверить снова', 'start')]]);
     }
     const rows = mine.slice(0, 20).map(c => [btn(`📢 ${c.name} · ${c.members.length}`, 'chan', c.id)]);
-    say(uid, `👋 Привет! Я ЮЗ — накручиваю подписчиков на каналы.\n💰 1 подписчик = ${SUB_PRICE} Mars\n\nВыберите канал:`, rows);
+    say(uid, `👋 Привет! Я НАКРУТКА БОТ — накручиваю подписчиков на каналы.\n💰 1 подписчик = ${SUB_PRICE} Mars\n\nВыберите канал:`, rows);
 }
 
 function packsFor(uid, chan) {
     const rows = PACKS.map(n => [btn(`${n} ${subWord(n)} — ${n * SUB_PRICE} Mars`, 'pack', `${chan.id}|${n}`)]);
+    rows.push([btn('✏️ Своё количество', 'custom', chan.id)]);
     rows.push([btn('⬅️ Назад', 'start')]);
     say(uid, `Канал «${chan.name}»\nСейчас подписчиков: ${chan.members.length}\n\nСколько подписчиков добавить?`, rows);
+}
+
+// Чек заказа с кнопкой оплаты
+function orderMsg(uid, me, chan, n) {
+    const price = n * SUB_PRICE;
+    youSay(uid, `${n} ${subWord(n)}`);
+    const bal = isUnlimited(me) ? '∞' : (me.mars || 0);
+    return say(uid, `🧾 Заказ\nКанал: «${chan.name}»\nПодписчиков: ${n}\nК оплате: ${price} Mars\nВаш баланс: ${bal} Mars`,
+        [[btn(`✅ Оплатить ${price} Mars`, 'pay', `${chan.id}|${n}`)], [btn('❌ Отмена', 'start')]]);
 }
 
 // Все действия бота. Кнопки проверяются по тому, что бот сам выдал, цена считается на сервере.
@@ -672,15 +699,10 @@ async function handleBotClick(uid, a, v) {
 
     const [chanId, nStr] = String(v).split('|'), n = Number(nStr);
     const chats = read(F.chats), chan = chats.find(c => c.id === chanId && c.type === 'channel' && c.creator === uid);
-    if (!chan || !PACKS.includes(n)) return say(uid, 'Что-то пошло не так. Начните заново.', [[btn('⬅️ В меню', 'start')]]);
+    if (!chan || !Number.isInteger(n) || n < 1 || n > MAX_CUSTOM) return say(uid, 'Что-то пошло не так. Начните заново.', [[btn('⬅️ В меню', 'start')]]);
     const price = n * SUB_PRICE;
 
-    if (a === 'pack') {
-        youSay(uid, `${n} ${subWord(n)}`);
-        const bal = isUnlimited(me) ? '∞' : (me.mars || 0);
-        return say(uid, `🧾 Заказ\nКанал: «${chan.name}»\nПодписчиков: ${n}\nК оплате: ${price} Mars\nВаш баланс: ${bal} Mars`,
-            [[btn(`✅ Оплатить ${price} Mars`, 'pay', v)], [btn('❌ Отмена', 'start')]]);
-    }
+    if (a === 'pack') return orderMsg(uid, me, chan, n);
 
     if (a === 'pay') {
         youSay(uid, `✅ Оплатить ${price} Mars`);
@@ -721,6 +743,18 @@ app.post('/api/bot/start', async (req, res) => {
     res.json({ success: true });
 });
 
+// Заказ своего количества подписчиков
+app.post('/api/bot/custom', async (req, res) => {
+    const uid = req.uid, users = read(F.users), me = users.find(u => u.id === uid);
+    const chan = read(F.chats).find(c => c.id === String(req.body.chanId) && c.type === 'channel' && c.creator === uid);
+    const raw = Number(req.body.n), n = Math.floor(raw);
+    if (!me || !chan) return res.status(400).json({ error: 'Канал не найден' });
+    if (!Number.isFinite(raw) || n < 1 || n > MAX_CUSTOM) return res.status(400).json({ error: `Введите число от 1 до ${MAX_CUSTOM}` });
+    orderMsg(uid, me, chan, n);
+    await persist();
+    res.json({ success: true });
+});
+
 // Нажатие кнопки в сообщении бота
 app.post('/api/bot/click', async (req, res) => {
     const uid = req.uid;
@@ -728,6 +762,11 @@ app.post('/api/bot/click', async (req, res) => {
     const msg = msgs.find(m => m.id === String(req.body.messageId) && m.senderId === BOT_ID && m.chatId === directId(uid, BOT_ID));
     const b = msg && msg.buttons && (msg.buttons[Number(req.body.row)] || [])[Number(req.body.col)];
     if (!b) return res.status(400).json({ error: 'Кнопка устарела' });
+    if (b.a === 'custom') { // своё количество: меню не гасим, клиент спросит число и вызовет /api/bot/custom
+        const own = read(F.chats).some(c => c.id === b.v && c.type === 'channel' && c.creator === uid);
+        if (!own) return res.status(400).json({ error: 'Канал не найден' });
+        return res.json({ success: true, ask: b.v, max: MAX_CUSTOM, price: SUB_PRICE });
+    }
     msg.buttons = []; // нажатое меню гасим: второй раз нажать нельзя (защита от двойной оплаты)
     write(F.messages, msgs);
     sendTo([uid], { type: 'botUpdate', data: { chatId: msg.chatId, messageId: msg.id, buttons: [] } });
@@ -800,10 +839,32 @@ const CATALOG = [
     { kind: 'phoenix',  rarity: 'legendary', emoji: '🦅', name: 'Феникс',       price: 15000, supply: 3,    bg: ['#ffd200', '#f12711'] },
     { kind: 'infinity', rarity: 'legendary', emoji: '♾️', name: 'Бесконечность', price: 50000, supply: 1,    bg: ['#232526', '#0f9b8e'] }
 ];
+// Фоны подарков: при покупке фон выпадает случайно. pct — шанс выпадения в процентах (чем меньше, тем реже и ценнее)
+const BACKDROPS = [
+    { id: 'fog',     name: 'Серый туман',  pct: 18,  c: ['#d7dde5', '#98a4b3'] },
+    { id: 'sky',     name: 'Небесный',     pct: 16,  c: ['#a8d8ff', '#4a93e0'] },
+    { id: 'mint',    name: 'Мятный',       pct: 14,  c: ['#b8f0d4', '#3fb98a'] },
+    { id: 'peach',   name: 'Персик',       pct: 12,  c: ['#ffd3b6', '#f08a5d'] },
+    { id: 'lilac',   name: 'Сирень',       pct: 10,  c: ['#e3c9ff', '#9a6fd8'] },
+    { id: 'lime',    name: 'Лаймовый',     pct: 8,   c: ['#e4f99a', '#8fc31f'] },
+    { id: 'berry',   name: 'Малиновый',    pct: 7,   c: ['#ffa6c9', '#d6336c'] },
+    { id: 'amber',   name: 'Янтарный',     pct: 5,   c: ['#ffe08a', '#e8890c'] },
+    { id: 'ocean',   name: 'Океан',        pct: 4,   c: ['#4fd1c5', '#16508f'] },
+    { id: 'violet',  name: 'Фиолетовый',   pct: 3,   c: ['#9f7aea', '#44238c'] },
+    { id: 'lava',    name: 'Лава',         pct: 2,   c: ['#ff7a45', '#8f1010'] },
+    { id: 'emerald', name: 'Изумруд',      pct: 0.7, c: ['#34e89e', '#0a5c3e'] },
+    { id: 'cosmos',  name: 'Космос',       pct: 0.3, c: ['#3a1c71', '#0b0b2b'] }
+];
+function pickBackdrop() {
+    let r = Math.random() * BACKDROPS.reduce((a, b) => a + b.pct, 0);
+    for (const b of BACKDROPS) { if ((r -= b.pct) < 0) return b; }
+    return BACKDROPS[0];
+}
+
 const giftOut = (g, users) => {
     const f = users.find(u => u.id === g.fromId);
     return {
-        id: g.id, kind: g.kind, serial: g.serial, at: g.at,
+        id: g.id, kind: g.kind, serial: g.serial, at: g.at, bd: g.bd,
         from: f ? { id: f.id, username: f.username, handle: f.handle, verified: VERIFIED.has(f.handle) } : null
     };
 };
@@ -819,7 +880,7 @@ function giftMessage(from, to, g, text) {
     }
     const msg = {
         id: crypto.randomUUID(), chatId: id, senderId: from, text,
-        gift: { kind: g.kind, serial: g.serial }, timestamp: new Date().toISOString()
+        gift: { kind: g.kind, serial: g.serial, bd: g.bd }, timestamp: new Date().toISOString()
     };
     const msgs = read(F.messages);
     msgs.push(msg);
@@ -831,7 +892,7 @@ app.get('/api/shop', (req, res) => {
     const sold = {};
     read(F.gifts).forEach(g => { sold[g.kind] = (sold[g.kind] || 0) + 1; });
     const me = read(F.users).find(u => u.id === req.uid);
-    res.json({ catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), ...(me ? walletOf(me) : { mars: 0 }), perMin: MARS_PER_MIN });
+    res.json({ backdrops: BACKDROPS, catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), ...(me ? walletOf(me) : { mars: 0 }), perMin: MARS_PER_MIN });
 });
 
 // Подарки пользователя — видны всем, это витрина в профиле
@@ -860,7 +921,7 @@ app.post('/api/gifts/buy', async (req, res) => {
 
     const now = new Date().toISOString();
     if (!unlimited) buyer.mars -= item.price;
-    const gift = { id: 'k_' + crypto.randomUUID(), kind: item.kind, serial: minted + 1, ownerId: toId, fromId: me, price: item.price, at: now };
+    const gift = { id: 'k_' + crypto.randomUUID(), kind: item.kind, serial: minted + 1, ownerId: toId, fromId: me, price: item.price, at: now, bd: pickBackdrop().id };
     gifts.push(gift);
     write(F.users, users);
     write(F.gifts, gifts);
