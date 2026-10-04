@@ -229,7 +229,7 @@ const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
 
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
-    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), ...(u.bot && { bot: true })
+    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc })
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u) });
 
@@ -247,15 +247,31 @@ function broadcast(payload) {
 // Чат в виде, удобном клиенту. list — сообщения этого чата
 // Реакции и просмотры постов канала
 const REACTIONS = ['👍', '❤️', '🔥', '😂', '😮', '😢', '🎉', '👎'];
-// Наружу отдаём сообщение без служебных полей; у постов канала считаем просмотры
-// (настоящие + «накрученные» подписчики, которые просматривают пост постепенно)
-function outMsg(m, isChannel) {
-    if (!m) return m;
-    if (!m.viewers && m.fv === undefined && !isChannel) return m;
-    const { viewers, fv, ...rest } = m;
+// Индекс пользователей: read() каждый раз парсит файл целиком, поэтому строим его лениво и один раз на запрос
+const lazyIdx = () => { let mp; return () => mp || (mp = new Map(read(F.users).map(u => [u.id, u]))); };
+const ixCache = new WeakMap();
+const ixOf = arr => { let m = ixCache.get(arr); if (!m) { m = new Map(arr.map(u => [u.id, u])); ixCache.set(arr, m); } return m; };
+const userLite = u => ({ id: u.id, username: u.username, avatar: u.avatar || '', verified: VERIFIED.has(u.handle), ...(u.acc && { acc: u.acc }) });
+// Наружу отдаём сообщение без служебных полей.
+// Лента канала: просмотры (настоящие + «накрученные» подписчики, которые просматривают пост постепенно) и комментарии.
+// Текстовый канал (open): как группа — у сообщения есть имя отправителя.
+function outMsg(m, chat, ix = lazyIdx()) {
+    if (!m || !chat || chat.type !== 'channel') return m;
+    const { viewers, fv, comments, ...o } = m;
+    if (chat.open) {
+        const u = ix().get(m.senderId);
+        if (u) { o.sn = u.username; if (VERIFIED.has(u.handle)) o.sv = true; if (u.acc) o.sacc = u.acc; }
+        return o;
+    }
     const age = Date.now() - new Date(m.timestamp).getTime();
-    const fake = Math.round((fv || 0) * Math.min(1, 0.25 + age / 240000));
-    return { ...rest, views: (viewers ? viewers.length : 0) + fake };
+    o.views = (viewers ? viewers.length : 0) + Math.round((fv || 0) * Math.min(1, 0.25 + age / 240000));
+    o.cc = comments ? comments.length : 0;
+    if (o.cc) {
+        const seen = [];
+        for (let i = comments.length - 1; i >= 0 && seen.length < 3; i--) if (!seen.includes(comments[i].userId)) seen.push(comments[i].userId);
+        o.ca = seen.map(id => ix().get(id)).filter(Boolean).map(u => ({ id: u.id, username: u.username, avatar: u.avatar || '' }));
+    }
+    return o;
 }
 const fakeInChannel = (chat, users) => {
     const fk = new Set(users.filter(u => u.fake).map(u => u.id));
@@ -272,7 +288,7 @@ function markViews(chat, uid) {
         if (x.fv === undefined) { if (fakeN === null) fakeN = fakeInChannel(chat, read(F.users)); x.fv = rollFv(fakeN); ch = true; }
         x.viewers = x.viewers || [];
         if (!x.viewers.includes(uid)) { x.viewers.push(uid); ch = true; }
-        if (ch) (items = items || {})[x.id] = outMsg(x, true).views;
+        if (ch) (items = items || {})[x.id] = outMsg(x, chat).views;
     });
     if (!items) return;
     write(F.messages, msgs);
@@ -287,7 +303,7 @@ function shape(chat, me, users, list) {
     const o = {
         id: chat.id, type: chat.type, name: chat.name, avatar: chat.avatar || '',
         creator: chat.creator, createdAt: chat.createdAt, reads,
-        last: outMsg(list[list.length - 1] || null, chat.type === 'channel'),
+        last: outMsg(list[list.length - 1] || null, chat, () => ixOf(users)),
         unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length
     };
     if (chat.type === 'direct') {
@@ -298,6 +314,7 @@ function shape(chat, me, users, list) {
     } else { // канал
         o.description = chat.description || '';
         o.handle = chat.handle || '';
+        o.open = !!chat.open;
         o.subscribers = chat.members.length;
         if (chat.creator === me) o.members = chat.members.map(byId).filter(Boolean).map(pub); // список подписчиков видит автор
     }
@@ -519,7 +536,7 @@ app.post('/api/groups/:id/members', (req, res) => {
 const cleanHandle = h => String(h || '').trim().replace(/^@/, '').toLowerCase();
 const chanPub = (c, me) => ({
     id: c.id, name: c.name, handle: c.handle || '', description: c.description || '',
-    avatar: c.avatar || '', subscribers: c.members.length, subscribed: c.members.includes(me)
+    avatar: c.avatar || '', subscribers: c.members.length, subscribed: c.members.includes(me), open: !!c.open
 });
 const HANDLE_ERR = 'Юзернейм канала: 3–20 символов, латиница, цифры и _';
 
@@ -536,7 +553,7 @@ app.post('/api/channels', (req, res) => {
         return res.status(400).json({ error: 'Этот юзернейм канала уже занят' });
     const ch = {
         id: 'c_' + Date.now(), type: 'channel', name, description, handle, avatar: '',
-        creator: me, members: [me], reads: {}, createdAt: new Date().toISOString()
+        creator: me, members: [me], reads: {}, createdAt: new Date().toISOString(), ...(req.body.open && { open: true })
     };
     chats.push(ch);
     write(F.chats, chats);
@@ -549,7 +566,8 @@ app.put('/api/channels/:id', (req, res) => {
     const ch = chats.find(c => c.id === req.params.id && c.type === 'channel');
     if (!ch || ch.creator !== me) return res.status(403).json({ error: 'Нет доступа' });
 
-    const { name, description, handle, avatar } = req.body;
+    const { name, description, handle, avatar, open } = req.body;
+    if (open !== undefined) { if (open) ch.open = true; else delete ch.open; }
     if (name !== undefined) {
         const n = String(name).trim().slice(0, 40);
         if (!n) return res.status(400).json({ error: 'Название не может быть пустым' });
@@ -969,6 +987,20 @@ app.post('/api/gifts/buy', async (req, res) => {
     res.json({ success: true, ...walletOf(buyer), gift: giftOut(gift, users) });
 });
 
+// Носить подарок рядом с ником (один) или снять
+app.post('/api/gifts/:id/wear', async (req, res) => {
+    const me = req.uid, g = read(F.gifts).find(x => x.id === req.params.id);
+    if (!g || g.ownerId !== me) return res.status(403).json({ error: 'Это не ваш подарок' });
+    const users = read(F.users), u = users.find(x => x.id === me);
+    if (!u) return res.status(401).json({ error: 'Войдите в аккаунт' });
+    if (req.body.on) u.acc = { gid: g.id, kind: g.kind, serial: g.serial, bd: g.bd };
+    else delete u.acc;
+    write(F.users, users);
+    broadcast({ type: 'chat' }); // у всех обновится ник
+    await persist();
+    res.json({ success: true, acc: u.acc || null });
+});
+
 // Передать свой подарок другому (бесплатно)
 app.post('/api/gifts/:id/transfer', async (req, res) => {
     const me = req.uid, toId = Number(req.body.toId);
@@ -976,6 +1008,8 @@ app.post('/api/gifts/:id/transfer', async (req, res) => {
     if (!g || g.ownerId !== me) return res.status(403).json({ error: 'Это не ваш подарок' });
     if (toId === me || !read(F.users).some(u => u.id === toId)) return res.status(400).json({ error: 'Выберите другого получателя' });
     if (blockedEither(me, toId)) return res.status(400).json({ error: 'Нельзя передать подарок: один из вас заблокировал другого' });
+    const users = read(F.users), owner = users.find(u => u.id === me);
+    if (owner && owner.acc && owner.acc.gid === g.id) { delete owner.acc; write(F.users, users); broadcast({ type: 'chat' }); } // подарок ушёл — аксессуар снимается
     g.ownerId = toId;
     g.fromId = me;
     g.at = new Date().toISOString();
@@ -990,8 +1024,8 @@ app.get('/api/messages/:chatId', (req, res) => {
     const me = Number(req.query.userId);
     const chat = read(F.chats).find(c => String(c.id) === req.params.chatId);
     if (!chat || !chat.members.includes(me)) return res.status(403).json({ error: 'Нет доступа' });
-    const clr = (chat.cleared || {})[me] || '';
-    res.json(read(F.messages).filter(m => m.chatId === chat.id && m.timestamp > clr).slice(-500).map(m => outMsg(m, chat.type === 'channel')));
+    const clr = (chat.cleared || {})[me] || '', ix = lazyIdx();
+    res.json(read(F.messages).filter(m => m.chatId === chat.id && m.timestamp > clr).slice(-500).map(m => outMsg(m, chat, ix)));
 });
 
 // ---------- Удаление и редактирование сообщений ----------
@@ -1021,6 +1055,45 @@ app.put('/api/messages/:messageId', (req, res) => {
     write(F.messages, messages);
     const chat = chatOf(msg.chatId);
     sendTo(chat ? chat.members : [me], { type: 'messageEdited', data: { chatId: msg.chatId, messageId: msg.id, text, edited: msg.edited } });
+    res.json({ success: true });
+});
+
+// ---------- Комментарии к постам канала ----------
+const cmOut = (c, ix) => { const u = ix().get(c.userId); return { id: c.id, userId: c.userId, text: c.text, at: c.at, u: u ? userLite(u) : { id: c.userId, username: 'Удалённый аккаунт', avatar: '' } }; };
+// Пост ленты канала, к которому участник может писать комментарии
+function postFor(req, res) {
+    const messages = read(F.messages), msg = messages.find(m => m.id === req.params.messageId);
+    const chat = msg && chatOf(msg.chatId);
+    if (!msg || !chat || chat.type !== 'channel' || chat.open || !chat.members.includes(req.uid)) { res.status(404).json({ error: 'Пост не найден' }); return null; }
+    return { messages, msg, chat };
+}
+app.get('/api/messages/:messageId/comments', (req, res) => {
+    const p = postFor(req, res); if (!p) return;
+    const ix = lazyIdx(), list = p.msg.comments || [];
+    res.json({ count: list.length, comments: list.slice(-200).map(c => cmOut(c, ix)) });
+});
+app.post('/api/messages/:messageId/comments', async (req, res) => {
+    const p = postFor(req, res); if (!p) return;
+    const text = String(req.body.text || '').trim().slice(0, 500);
+    if (!text) return res.status(400).json({ error: 'Напишите комментарий' });
+    const c = { id: crypto.randomUUID(), userId: req.uid, text, at: new Date().toISOString() };
+    p.msg.comments = (p.msg.comments || []).concat(c).slice(-1000);
+    write(F.messages, p.messages);
+    const ix = lazyIdx(), o = outMsg(p.msg, p.chat, ix), out = cmOut(c, ix);
+    sendTo(p.chat.members, { type: 'comments', data: { chatId: p.chat.id, messageId: p.msg.id, cc: o.cc, ca: o.ca || [], comment: out } });
+    await persist();
+    res.json({ success: true, comment: out });
+});
+app.delete('/api/messages/:messageId/comments/:cid', async (req, res) => {
+    const p = postFor(req, res); if (!p) return;
+    const c = (p.msg.comments || []).find(x => x.id === req.params.cid);
+    if (!c) return res.status(404).json({ error: 'Комментарий не найден' });
+    if (c.userId !== req.uid && p.chat.creator !== req.uid) return res.status(403).json({ error: 'Нельзя удалить чужой комментарий' });
+    p.msg.comments = p.msg.comments.filter(x => x !== c);
+    write(F.messages, p.messages);
+    const o = outMsg(p.msg, p.chat);
+    sendTo(p.chat.members, { type: 'comments', data: { chatId: p.chat.id, messageId: p.msg.id, cc: o.cc, ca: o.ca || [], removed: c.id } });
+    await persist();
     res.json({ success: true });
 });
 
@@ -1105,7 +1178,7 @@ wss.on('connection', ws => {
             if (!chat || !chat.members.includes(uid)) return;
 
             if (m.type === 'message') {
-                if (chat.type === 'channel' && chat.creator !== uid) return; // в канал пишет только автор
+                if (chat.type === 'channel' && chat.creator !== uid && !chat.open) return; // в канал пишет только автор (в текстовом — все)
                 if (chat.type === 'direct') {
                     const other = chat.members.find(i => i !== uid);
                     if (other === BOT_ID) return; // с ботом общаются кнопками
@@ -1126,14 +1199,14 @@ wss.on('connection', ws => {
                     id: crypto.randomUUID(), chatId: chat.id, senderId: uid, text,
                     ...(media && { media }), timestamp: new Date().toISOString()
                 };
-                if (chat.type === 'channel') { msg.viewers = [uid]; msg.fv = rollFv(fakeInChannel(chat, read(F.users))); }
+                if (chat.type === 'channel' && !chat.open) { msg.viewers = [uid]; msg.fv = rollFv(fakeInChannel(chat, read(F.users))); }
                 const msgs = read(F.messages);
                 msgs.push(msg);
                 write(F.messages, msgs);
-                sendTo(chat.members, { type: 'message', data: outMsg(msg, chat.type === 'channel'), cid: m.cid ? String(m.cid).slice(0, 40) : undefined }); // только участникам чата; cid — чтобы отправитель заменил своё временное сообщение
+                sendTo(chat.members, { type: 'message', data: outMsg(msg, chat), cid: m.cid ? String(m.cid).slice(0, 40) : undefined }); // только участникам чата; cid — чтобы отправитель заменил своё временное сообщение
 
             } else if (m.type === 'read') {
-                if (chat.type === 'channel') markViews(chat, uid);
+                if (chat.type === 'channel' && !chat.open) markViews(chat, uid);
                 // Помечаем прочитанным всё до последнего сообщения включительно
                 const last = read(F.messages).filter(x => x.chatId === chat.id).pop();
                 const at = last ? last.timestamp : '';
