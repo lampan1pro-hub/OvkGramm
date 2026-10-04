@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>SAIMONGRAM</title>
+<title>OVKGRAMM</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--p:#0084ff;--pd:#0066cc;--pl:#e7f3ff;--bg:#f0f2f5;--t:#111;--t2:#65676b;--b:#e5e5ea;--on:#31a24c}
@@ -118,7 +118,7 @@ input,textarea{font:inherit;color:inherit}
 
 <div id="auth">
   <form class="card" id="authForm">
-    <div class="logo">SAIMONGRAM</div>
+    <div class="logo">OVKGRAMM</div>
     <p class="tag">Реальное общение с друзьями</p>
     <div class="f" id="fN"><label>Имя</label><input id="an" maxlength="40" autocomplete="name"></div>
     <div class="f" id="fH"><label>Юзернейм</label><input id="ah" maxlength="21" autocapitalize="off" autocomplete="off" placeholder="латиница, цифры и _"></div>
@@ -133,7 +133,7 @@ input,textarea{font:inherit;color:inherit}
 <div id="app" hidden>
   <aside id="side">
     <div class="sh">
-      <h1>SAIMONGRAM</h1>
+      <h1>OVKGRAMM</h1>
       <button class="ib" id="newGroup" title="Новая группа">👥</button>
       <button id="meBtn" title="Мой профиль"></button>
     </div>
@@ -176,16 +176,7 @@ const api = async (url, method = 'GET', body) => {
   if (!r.ok) throw new Error(d.error || 'Ошибка сервера');
   return d;
 };
-const save = () => localStorage.setItem('sai_user', JSON.stringify(me));
-const saveSessionTime = () => {
-    if (!me?.id) return;
-    const sessions = JSON.parse(localStorage.getItem('sai_sessions') || '{}');
-    const elapsed = Date.now() - sessionStartTime;
-    if (!sessions[me.id]) sessions[me.id] = me.sessionTime || 0;
-    sessions[me.id] += elapsed;
-    localStorage.setItem('sai_sessions', JSON.stringify(sessions));
-    if (me) me.sessionTime = sessions[me.id];
-};
+const save = () => localStorage.setItem('ovk_user', JSON.stringify(me));
 const hm = t => new Date(t).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
 const lt = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? hm(t) : d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit'}); };
 const dl = t => new Date(t).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'});
@@ -287,37 +278,15 @@ $('#authForm').onsubmit = async e => {
   } catch (x) { $('#aerr').textContent = x.message; }
 };
 
-let sessionStartTime = Date.now();
-let sessionInterval = null;
-
-function startSessionTracking() {
-  if (sessionInterval) clearInterval(sessionInterval);
-  sessionInterval = setInterval(() => {
-    const elapsed = Date.now() - sessionStartTime;
-    if (me?.id) {
-      const sessions = JSON.parse(localStorage.getItem('sai_sessions') || '{}');
-      if (!sessions[me.id]) sessions[me.id] = me.sessionTime || 0;
-      sessions[me.id] = Math.max(sessions[me.id], (sessions[me.id] || 0) + elapsed);
-      localStorage.setItem('sai_sessions', JSON.stringify(sessions));
-      me.sessionTime = sessions[me.id];
-      api('/api/sessions/update', 'POST', {userId: me.id, sessionTime: sessions[me.id]}).catch(() => {});
-    }
-    sessionStartTime = Date.now();
-  }, 60000); // Обновляем каждую минуту
-}
-
 function boot() {
   $('#auth').hidden = true;
   $('#app').hidden = false;
-  startSessionTracking();
   paintMe(); renderList(); connect();
 }
 const paintMe = () => { $('#meBtn').innerHTML = uav(me, 'xs') + '<span>Профиль</span>'; };
 
 function logout(msg) {
-  if (sessionInterval) clearInterval(sessionInterval);
-  saveSessionTime();
-  localStorage.removeItem('sai_user');
+  localStorage.removeItem('ovk_user');
   me = null; cur = null; query = ''; found = []; pend = null; opened = false;
   if (ws) { ws.onclose = null; ws.close(); }
   chats = new Map(); msgs = new Map();
@@ -709,49 +678,14 @@ function myProfile() {
   $('#lo').onclick = () => logout();
 }
 
-async function userProfile(u) {
-  let nftsHtml = '';
-  let timeHtml = '';
-  
-  try {
-    const nfts = await api(`/api/nfts/${u.id}`, 'GET');
-    if (nfts && nfts.length > 0) {
-      nftsHtml = `<div style="margin-top:12px"><div class="sec" style="padding-left:0">NFT (${nfts.length})</div>
-<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${nfts.map(n => `<span style="font-size:24px">${n.type}</span>`).join('')}</div></div>`;
-    }
-  } catch {}
-  
-  try {
-    const sess = await api(`/api/sessions/${u.id}`, 'GET');
-    if (sess && sess.time) {
-      const hours = Math.floor(sess.time / 3600000);
-      const mins = Math.floor((sess.time % 3600000) / 60000);
-      timeHtml = `<div style="color:var(--t2);font-size:13px;margin-top:4px">🕐 ${hours}ч ${mins}м в приложении</div>`;
-    }
-  } catch {}
-  
+function userProfile(u) {
   modal(`<div style="text-align:center">${uav(u, 'l', true)}
 <h2 style="margin-top:12px">${esc(u.username)}</h2>
 <div style="color:var(--p)">@${esc(u.handle)}</div>
 <div style="color:var(--t2);font-size:13px">${u.online ? 'в сети' : 'не в сети'}</div>
-${timeHtml}
-${u.bio ? `<p style="margin-top:12px">${esc(u.bio)}</p>` : ''}
-${nftsHtml}</div>
-<div class="row"><button class="btn" id="wr">Написать</button>${u.id !== me.id ? '<button class="btn g" id="gift">🎁 Подарить</button>' : ''}
-<button class="btn g" data-x>Закрыть</button></div>`);
+${u.bio ? `<p style="margin-top:12px">${esc(u.bio)}</p>` : ''}</div>
+<div class="row"><button class="btn" id="wr">Написать</button><button class="btn g" data-x>Закрыть</button></div>`);
   $('#wr').onclick = () => openUser(u.id);
-  const giftBtn = $('#gift');
-  if (giftBtn) {
-    giftBtn.onclick = async () => {
-      try {
-        await api('/api/nfts/send', 'POST', {senderId: me.id, receiverId: u.id});
-        closeModal();
-        alert('✅ NFT отправлен!');
-      } catch (e) {
-        alert('❌ ' + e.message);
-      }
-    };
-  }
 }
 
 /* ---------- Группы ---------- */
@@ -764,13 +698,6 @@ function putChat(g) {
 function groupInfo(id) {
   const c = chats.get(id);
   if (!c) return;
-  
-  const getMessages = () => {
-    const msgs = msgs.get(id) || [];
-    const uniqueSenders = new Set(msgs.map(m => m.senderId));
-    return [...uniqueSenders];
-  };
-  
   modal(`<div style="text-align:center"><div id="gav">${cav(c, 'l')}</div>
 <button class="lnk" id="gph">Сменить фото</button><button class="lnk" id="grm" ${c.avatar ? '' : 'hidden'}>Убрать</button></div>
 <form id="gf" style="margin-top:12px">
@@ -779,9 +706,8 @@ function groupInfo(id) {
 <button class="btn">Сохранить название</button></form>
 <div class="sec" style="padding-left:0;margin-top:10px">Участники: ${c.members.length}</div>
 <button type="button" class="btn g" id="gadd" style="margin:4px 0 6px">＋ Добавить участников</button>
-<div class="f" style="margin-bottom: 8px"><input id="gmembersSearch" placeholder="🔍 Поиск по имени или @юзернейму" style="width:100%"></div>
-<div id="membersList" style="max-height:220px;overflow:auto">${c.members.map(u =>
-  `<div class="it" data-p="${u.id}" style="padding-left:0;padding-right:0;cursor:pointer" data-member-name="${u.username.toLowerCase()}" data-member-handle="${u.handle.toLowerCase()}">${uav(u, 's', true)}<div class="im"><div class="nm">${esc(u.username)}${u.id === me.id ? ' (вы)' : ''}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
+<div style="max-height:220px;overflow:auto">${c.members.map(u =>
+  `<div class="it" data-p="${u.id}" style="padding-left:0;padding-right:0">${uav(u, 's', true)}<div class="im"><div class="nm">${esc(u.username)}${u.id === me.id ? ' (вы)' : ''}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
 <div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
 
   const patch = async body => {
@@ -802,19 +728,6 @@ function groupInfo(id) {
   };
   $('#grm').onclick = () => patch({avatar: ''}).catch(x => { $('#ge').textContent = x.message; });
   $('#gadd').onclick = () => addMembers(id);
-  
-  const searchInput = $('#gmembersSearch');
-  if (searchInput) {
-    searchInput.oninput = () => {
-      const query = searchInput.value.toLowerCase().replace(/^@/, '');
-      $('#card').querySelectorAll('[data-member-name]').forEach(el => {
-        const name = el.dataset.memberName;
-        const handle = el.dataset.memberHandle;
-        el.hidden = !name.includes(query) && !handle.includes(query);
-      });
-    };
-  }
-  
   $('#card').querySelectorAll('[data-p]').forEach(el => el.onclick = () => {
     const u = c.members.find(x => x.id == el.dataset.p);
     if (u && u.id !== me.id) userProfile(u);
@@ -868,13 +781,7 @@ if (window.visualViewport) {
 /* ---------- Запуск ---------- */
 (async () => {
   authUI();
-  try { 
-    me = JSON.parse(localStorage.getItem('sai_user'));
-    if (me?.id) {
-      const sessions = JSON.parse(localStorage.getItem('sai_sessions') || '{}');
-      me.sessionTime = sessions[me.id] || 0;
-    }
-  } catch { me = null; }
+  try { me = JSON.parse(localStorage.getItem('ovk_user')); } catch { me = null; }
   if (me && await checkSession()) boot();
 })();
 </script>
