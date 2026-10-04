@@ -291,6 +291,34 @@ button,input,textarea{transition:background .15s,border-color .15s,box-shadow .1
 #auth .card{border-radius:28px}
 #auth .btn{border-radius:16px}
 
+
+/* ===== Реакции, просмотры, окно подарка ===== */
+.rx{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;clear:both}
+.m.mm .rx{padding:0 6px 2px}
+.rxc{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:14px;background:rgba(51,144,236,.12);color:var(--pd);font-size:13px;font-weight:600;line-height:20px}
+.rxc.on{background:var(--p);color:#fff}
+.m.me .rxc{background:rgba(76,175,80,.16);color:#3d8b40}
+.m.me .rxc.on{background:#4fae4e;color:#fff}
+#rbar{position:fixed;z-index:60;display:flex;gap:2px;padding:6px 8px;background:#fff;border-radius:28px;box-shadow:0 6px 28px rgba(0,0,0,.22);animation:popIn .18s ease-out}
+#rbar button{font-size:24px;line-height:1;padding:6px;border-radius:50%;background:transparent}
+#rbar button:hover{background:var(--bg);transform:scale(1.18)}
+.vw{margin-right:6px}
+.gb{cursor:pointer}
+.gb .gq{margin-top:8px;padding:7px 12px;border-radius:14px;background:rgba(255,255,255,.24);font-size:14px;white-space:pre-wrap}
+.gc .gnote{position:absolute;top:6px;right:8px;font-size:13px}
+.gc{position:relative}
+.gh2{font-size:24px;font-weight:700;text-align:center;margin-top:14px}
+.gtab{border:1px solid var(--b);border-radius:18px;overflow:hidden;margin-top:14px;text-align:left}
+.gtab .gr{display:flex;border-top:1px solid var(--b)}
+.gtab .gr:first-child{border-top:0}
+.gtab .gk{flex:0 0 34%;padding:13px 14px;background:var(--bg);font-weight:700;font-size:15px;border-right:1px solid var(--b)}
+.gtab .gv{flex:1;padding:13px 14px;font-size:15px;overflow-wrap:anywhere}
+.gtab .gnv{font-size:16px}
+.gok{border-radius:999px}
+.gc.big.pop{animation:popIn .45s ease-out}
+#form{margin:6px 10px calc(6px + env(safe-area-inset-bottom));padding:6px 8px;border-radius:26px;box-shadow:0 2px 12px rgba(16,35,47,.10)}
+#pend{margin:6px 10px 0;border-radius:18px}
+
 /* Тонкий круглый скроллбар */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
@@ -650,6 +678,22 @@ async function onWs(m) {
     const c = chats.get(d.chatId);
     if (c && c.last && c.last.id === d.messageId) { c.last.text = d.text; c.last.edited = d.edited; }
     renderList();
+  } else if (m.type === 'reaction') {
+    const l = msgs.get(d.chatId), i = l ? l.findIndex(x => x.id === d.messageId) : -1;
+    if (i >= 0) {
+      if (Object.keys(d.reactions).length) l[i].reactions = d.reactions; else delete l[i].reactions;
+      const el = cur === d.chatId && bubbleEl(d.messageId);
+      if (el) setRx(el, l[i]);
+    }
+  } else if (m.type === 'views') {
+    const l = msgs.get(d.chatId);
+    if (l) Object.entries(d.items).forEach(([id, v]) => {
+      const x = l.find(y => y.id === id);
+      if (!x) return;
+      x.views = v;
+      const el = cur === d.chatId && bubbleEl(id), sp = el && el.querySelector('[data-vw]');
+      if (sp) sp.textContent = '👁 ' + fmtViews(v);
+    });
   } else if (m.type === 'botUpdate') {
     const l = msgs.get(d.chatId), i = l ? l.findIndex(x => x.id === d.messageId) : -1;
     if (i >= 0) {
@@ -823,6 +867,42 @@ const mediaHtml = md => {
     : `<img class="ph" src="${esc(md.url)}" alt="Фото" loading="lazy" decoding="async" style="${ar}">`;
 };
 const btnsHtml = m => m.buttons && m.buttons.length ? '<div class="bb">' + m.buttons.map((row, r) => '<div class="br">' + row.map((b, k) => `<button type="button" class="bbtn" data-r="${r}" data-k="${k}">${esc(b.t)}</button>`).join('') + '</div>').join('') + '</div>' : '';
+const REACTS = ['👍', '❤️', '🔥', '😂', '😮', '😢', '🎉', '👎'];
+const rxHtml = m => {
+  const e = Object.entries(m.reactions || {}).filter(([, a]) => a.length);
+  return e.length ? '<div class="rx">' + e.map(([x, a]) => `<button type="button" class="rxc ${a.includes(me.id) ? 'on' : ''}" data-e="${x}">${x} ${a.length}</button>`).join('') + '</div>' : '';
+};
+const fmtViews = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '').replace('.', ',') + 'M' : n >= 1000 ? (n / 1000).toFixed(1).replace('.0', '').replace('.', ',') + 'K' : String(n);
+// Обновить только ряд реакций (видео и фото не перерисовываются)
+function setRx(el, m) {
+  const old = el.querySelector(':scope > .rx'), html = rxHtml(m);
+  if (old) old.outerHTML = html;
+  else if (html) el.querySelector(':scope > time').insertAdjacentHTML('beforebegin', html);
+}
+async function react(id, e) {
+  try { await api(`/api/messages/${encodeURIComponent(id)}/react`, 'POST', {emoji: e}); }
+  catch (x) { toast(x.message); }
+}
+// Панель реакций над сообщением (тап по сообщению)
+let rbarLast = null;
+const hideRbar = () => { const b = $('#rbar'); if (b) { rbarLast = b.dataset.id; b.remove(); } };
+function showRbar(el) {
+  const c = chats.get(cur);
+  if (!c || (c.peer && c.peer.bot) || el.classList.contains('pending')) return;
+  const id = el.dataset.id;
+  if (rbarLast === id) { rbarLast = null; return; } // повторный тап по тому же сообщению закрывает панель
+  rbarLast = null;
+  const bar = document.createElement('div');
+  bar.id = 'rbar'; bar.dataset.id = id;
+  bar.innerHTML = REACTS.map(x => `<button type="button" data-e="${x}">${x}</button>`).join('');
+  document.body.appendChild(bar);
+  const r = el.getBoundingClientRect(), w = bar.offsetWidth, hh = bar.offsetHeight;
+  bar.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  bar.style.top = Math.max(8, r.top > hh + 70 ? r.top - hh - 6 : r.bottom + 6) + 'px';
+  bar.onclick = ev => { const b = ev.target.closest('button'); if (b) { react(id, b.dataset.e); rbarLast = null; bar.remove(); } };
+}
+document.addEventListener('pointerdown', e => { if (!e.target.closest('#rbar')) { hideRbar(); setTimeout(() => { rbarLast = null; }, 400); } }, true);
+msgsEl.addEventListener('scroll', hideRbar, {passive: true});
 function bubbleHtml(c, l, i) {
   const m = l[i], prev = l[i - 1], mine = m.senderId === me.id, ch = c.type === 'channel';
   let who = '';
@@ -832,7 +912,7 @@ function bubbleHtml(c, l, i) {
   }
   const st = m.pending ? '<span class="tk">🕓</span>' : mine && !ch ? tick(c, m.timestamp) : '';
   const act = mine && !m.pending ? `<button class="mb" data-m="${esc(m.id)}" aria-label="Действия с сообщением">⋯</button>` : '';
-  return `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''} ${m.pending ? 'pending' : ''}" data-id="${esc(m.id)}"${m.cid ? ` data-cid="${esc(m.cid)}"` : ''}>${who}${m.gift ? giftBubble(m.gift, mine) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text ? `<span class="tx">${esc(m.text)}</span>` : ''}${btnsHtml(m)}<time>${act}${m.edited ? 'изм. ' : ''}${hm(m.timestamp)}${st}</time></div>`;
+  return `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''} ${m.pending ? 'pending' : ''}" data-id="${esc(m.id)}"${m.cid ? ` data-cid="${esc(m.cid)}"` : ''}>${who}${m.gift ? giftBubble(m.gift, mine, m.text) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text && !m.gift ? `<span class="tx">${esc(m.text)}</span>` : ''}${btnsHtml(m)}${rxHtml(m)}<time>${ch && m.views != null ? `<span class="vw" data-vw>👁 ${fmtViews(m.views)}</span>` : ''}${act}${m.edited ? 'изм. ' : ''}${hm(m.timestamp)}${st}</time></div>`;
 }
 const dayHtml = (l, i) => !l[i - 1] || new Date(l[i - 1].timestamp).toDateString() !== new Date(l[i].timestamp).toDateString()
   ? `<div class="day">${dl(l[i].timestamp)}</div>` : '';
@@ -868,10 +948,16 @@ msgsEl.onclick = async e => {
     } catch (x) { toast(x.message); bb.disabled = false; }
     return;
   }
+  const rc = e.target.closest('.rxc');
+  if (rc) return react(rc.closest('.m').dataset.id, rc.dataset.e);
+  const gbx = e.target.closest('.gb');
+  if (gbx) return openGiftMsg(gbx.closest('.m').dataset.id);
   const b = e.target.closest('.mb');
   if (b) return msgMenu(b.dataset.m);
   const i = e.target.closest('img.ph');
-  if (i) { $('#lbi').src = i.src; $('#lb').hidden = false; }
+  if (i) { $('#lbi').src = i.src; $('#lb').hidden = false; return; }
+  const mEl = e.target.closest('.m');
+  if (mEl && !e.target.closest('video,a,button,.bb') && !getSelection().toString()) showRbar(mEl);
 };
 msgsEl.oncontextmenu = e => { // правый клик / долгое нажатие на своём сообщении
   const el = e.target.closest('.m');
@@ -1367,13 +1453,48 @@ async function loadCatalog() {
 const giftCard = g => {
   const k = kindInfo(g.kind);
   const b = bdOf(g);
-  return `<div class="gc r-${k.rarity}" data-g="${esc(g.id)}" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div>${b ? `<div class="gp">${pctTxt(b.pct)}</div>` : ''}</div>`;
+  return `<div class="gc r-${k.rarity}" data-g="${esc(g.id)}" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div>${b ? `<div class="gp">${pctTxt(b.pct)}</div>` : ''}${g.note ? '<div class="gnote" title="Есть комментарий">💬</div>' : ''}</div>`;
 };
 // Подарок в переписке
-const giftBubble = (g, mine) => {
+const giftBubble = (g, mine, text) => {
   const k = kindInfo(g.kind);
-  return `<div class="gb" style="background:${giftBg(g, k)}"><div class="gt">🎁 ${mine ? 'Вы отправили подарок' : 'Подарок для вас'}</div><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gt">#${g.serial}${k.supply ? ' из ' + k.supply : ''}</div>${bdOf(g) ? `<div class="gt">${bdLine(g)}</div>` : ''}</div>`;
+  return `<div class="gb" style="background:${giftBg(g, k)}"><div class="gt">🎁 ${mine ? 'Вы отправили подарок' : 'Подарок для вас'}</div><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gt">#${g.serial}${k.supply ? ' из ' + k.supply : ''}</div>${bdOf(g) ? `<div class="gt">${bdLine(g)}</div>` : ''}${text ? `<div class="gq">${esc(text)}</div>` : ''}</div>`;
 };
+// Подарок из переписки открывается в том же окне, что и в профиле
+function openGiftMsg(id) {
+  const c = chats.get(cur), m = (msgs.get(cur) || []).find(x => x.id === id);
+  if (!c || !m || !m.gift) return;
+  const mine = m.senderId === me.id, from = mine ? me : c.peer;
+  giftInfo({...m.gift, note: m.text, at: m.timestamp, from: from && {id: from.id, username: from.username, handle: from.handle}}, false, closeModal);
+}
+// Выпадение фона при покупке: рулетка из фонов, останавливается на настоящем
+function revealGift(g, k, to, done) {
+  const list = [...backdrops.values()], fin = bdOf(g);
+  modal(`<div class="gc big" id="rvg" style="background:${gradient(k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div></div>
+<div class="gh2" id="rvt">🎲 Выбираем фон…</div>
+<div class="bdl" id="rvs" style="min-height:20px">${to ? 'Подарок для ' + esc(to.username) : ''}</div>
+<div class="row"><button class="btn gok" id="rvok" disabled>OK</button></div>`);
+  const box = $('#rvg');
+  $('#rvok').onclick = () => { closeModal(); done(); };
+  const finish = () => {
+    if (!document.body.contains(box)) return;
+    box.style.background = giftBg(g, k);
+    box.classList.add('pop');
+    $('#rvt').textContent = fin ? `Фон «${fin.name}»` : 'Готово!';
+    $('#rvs').textContent = (fin ? `${pctTxt(fin.pct)} · ${bdTier(fin.pct)}` : '') + (to ? ` · для ${to.username}` : '');
+    $('#rvok').disabled = false;
+  };
+  if (!fin || list.length < 2) return finish();
+  let n = 0;
+  (function step() {
+    if (!document.body.contains(box)) return;
+    if (n >= 18) return finish();
+    const b = list[Math.floor(Math.random() * list.length)];
+    box.style.background = `linear-gradient(150deg,${b.c[0]},${b.c[1]})`;
+    n++;
+    setTimeout(step, 60 + n * n * 0.5);
+  })();
+}
 
 // Витрина подарков в профиле
 async function loadGifts(uid, box, mine) {
@@ -1390,16 +1511,22 @@ async function loadGifts(uid, box, mine) {
 
 function giftInfo(g, mine, back) {
   if (!g) return;
-  const k = kindInfo(g.kind);
+  const k = kindInfo(g.kind), bd = bdOf(g), price = g.price != null ? g.price : k.price;
+  const row = (a, v) => `<div class="gr"><div class="gk">${a}</div><div class="gv">${v}</div></div>`;
+  const when = new Date(g.at).toLocaleString('ru-RU', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}).replace(' г.,', ' в');
   modal(`<div class="gc big" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div></div>
-<div style="text-align:center;margin-top:12px;font-weight:600">№${g.serial}${k.supply ? ' из ' + k.supply : ''} · ${rarityName(k.rarity)}</div>
-${bdOf(g) ? `<div class="bdl">${bdLine(g)}</div>` : ''}
-<div style="text-align:center;margin-top:12px;padding:10px 12px;background:var(--pl);border-radius:12px">
-${g.from ? `<div style="color:var(--p);font-weight:600;font-size:14px">💝 Подарок от</div><div style="color:var(--p);font-weight:700;margin-top:4px">${esc(g.from.username)}</div><div style="color:var(--t2);font-size:12px">@${esc(g.from.handle)}</div>` : '<div style="color:var(--t2);font-size:13px">🎁 Ваш подарок</div>'}
-<div style="color:var(--t2);font-size:12px;margin-top:6px">${new Date(g.at).toLocaleDateString('ru-RU')}</div>
+<div class="gh2">Подарок</div>
+<div class="gtab">
+${g.from ? row('От', `${esc(g.from.username)} <span style="color:var(--t2)">@${esc(g.from.handle)}</span>`) : ''}
+${row('Дата', esc(when))}
+${row('Стоимость', `👽 ${price}`)}
+${row('Номер', `№${g.serial}${k.supply ? ' из ' + k.supply : ''} · ${esc(rarityName(k.rarity))}`)}
+${bd ? row('Фон', `${esc(bd.name)} · ${pctTxt(bd.pct)} · ${bdTier(bd.pct)}`) : ''}
+${g.note ? `<div class="gr"><div class="gv gnv">${esc(g.note)}</div></div>` : ''}
 </div>
 <div class="err" id="ge"></div>
-<div class="row">${mine ? '<button class="btn" id="gtr">Передать</button>' : ''}<button type="button" class="btn g" id="gbk">Назад</button></div>`);
+<div class="row"><button class="btn gok" id="gbk">OK</button></div>
+${mine ? '<div class="row"><button class="btn g gok" id="gtr">Передать</button></div>' : ''}`);
   $('#gbk').onclick = back;
   if (mine) $('#gtr').onclick = () => pickUser('Кому передать подарок?', u => {
     if (!confirm(`Передать «${k.name} №${g.serial}» пользователю ${u.username}? Подарок уйдёт из вашего профиля.`)) return;
@@ -1478,17 +1605,7 @@ ${to ? `<div class="f" style="margin-top:12px"><label>Сообщение для 
     try {
       const r = await api('/api/gifts/buy', 'POST', {kind, toId: to && to.id, message: to ? $('#gmsg').value : ''});
       setMars(r.mars, r.unlimited);
-      if (to) { 
-        toast(`🎁 Подарок отправлен: ${to.username}`); 
-        openUser(to.id); 
-      } else { 
-        const b = bdOf(r.gift); 
-        giftBought(k.name, r.gift.serial);
-        setTimeout(() => {
-          toast(`Куплено: ${k.name} №${r.gift.serial}${b ? ' · фон «' + b.name + '» ' + pctTxt(b.pct) : ''}`); 
-          myProfile(); 
-        }, 400);
-      }
+      revealGift(r.gift, k, to, () => { if (to) { toast(`🎁 Подарок отправлен: ${to.username}`); openUser(to.id); } else myProfile(); });
     } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; b.disabled = false; }
   };
 }
@@ -1676,4 +1793,4 @@ if (window.visualViewport) {
 })();
 </script>
 </body>
-  </html>
+</html>
