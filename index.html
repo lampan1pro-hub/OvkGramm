@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SAIMONGRAM</title>
+<meta name="theme-color" content="#ffffff">
+<script>
+(function(){var t;try{t=localStorage.getItem('theme')}catch(e){}
+if(t!=='dark'&&t!=='light')t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+document.documentElement.dataset.theme=t;
+var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='dark'?'#17212b':'#ffffff'})();
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--p:#0084ff;--pd:#0066cc;--pl:#e7f3ff;--bg:#f0f2f5;--t:#111;--t2:#65676b;--b:#e5e5ea;--on:#31a24c}
@@ -319,6 +326,103 @@ button,input,textarea{transition:background .15s,border-color .15s,box-shadow .1
 #form{margin:6px 10px calc(6px + env(safe-area-inset-bottom));padding:6px 8px;border-radius:26px;box-shadow:0 2px 12px rgba(16,35,47,.10)}
 #pend{margin:6px 10px 0;border-radius:18px}
 
+
+/* ===== Комментарии, аксессуар у ника, чекбокс текстового канала ===== */
+.cm{display:flex;align-items:center;gap:10px;clear:both;margin:8px -4px -2px;padding:8px 4px 2px;border-top:1px solid rgba(112,117,121,.22);color:var(--p);font-weight:600;cursor:pointer;user-select:none}
+.cm:hover .cmt{text-decoration:underline}
+.cmav{display:inline-flex}
+.cmav+.cmav{margin-left:-12px}
+.cmav .av{width:30px;height:30px;font-size:13px;border:2px solid var(--cmb,#fff)}
+.cmt{flex:1;min-width:0;font-size:15px}
+.cmc{font-size:24px;line-height:1;font-weight:400}
+.cml{max-height:46vh;overflow-y:auto;margin:0 -6px 10px;padding:0 6px;display:flex;flex-direction:column;gap:12px}
+.cmi{display:flex;gap:10px;align-items:flex-start}
+.cmb{flex:1;min-width:0;background:var(--bg);border-radius:16px 16px 16px 6px;padding:7px 12px}
+.cmn{display:flex;align-items:baseline;gap:8px;font-size:13px}
+.cmn .nm{font-size:13px;font-weight:600;color:var(--p)}
+.cmn time{margin-left:auto;font-size:11px;color:var(--t2);white-space:nowrap}
+.cmx{margin-top:2px;font-size:15px;overflow-wrap:anywhere;white-space:pre-wrap}
+.cmd{opacity:.5;font-size:15px;padding:4px;border-radius:50%}
+.cmd:hover{opacity:1;background:rgba(112,117,121,.15)}
+.cmf{display:flex;gap:8px;align-items:center}
+.cmf input{flex:1;min-width:0;padding:11px 16px;border:1px solid var(--b);border-radius:24px;font-size:16px;background:var(--bg)}
+.cmf input:focus{outline:0;border-color:var(--p)}
+.cms{width:44px;height:44px;border-radius:50%;background:var(--p);color:#fff;font-size:18px;flex-shrink:0}
+.acc{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;margin-left:4px;font-size:12px;line-height:1;flex-shrink:0;vertical-align:middle;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+h2 .acc,.cmn .acc{margin-left:6px}
+h2 .acc{width:26px;height:26px;font-size:16px}
+#acctip{position:fixed;z-index:80;padding:7px 14px;border-radius:18px;background:rgba(60,60,64,.92);color:#fff;font-size:14px;font-weight:600;pointer-events:none;animation:popIn .15s ease-out;white-space:nowrap}
+.gc .gworn{position:absolute;top:6px;left:8px;font-size:13px}
+.chk{display:flex;gap:12px;align-items:flex-start;margin:4px 0 12px;padding:10px 12px;border-radius:16px;background:var(--bg);cursor:pointer}
+.chk input{margin-top:3px;width:18px;height:18px;accent-color:var(--p);flex-shrink:0}
+.chk b{display:block;font-size:15px}
+.chk small{display:block;color:var(--t2);font-size:12px;line-height:1.35;margin-top:2px}
+#themeBtn{font-size:18px}
+
+/* ===== Тёмная тема (палитра Telegram Night) ===== */
+html[data-theme=dark]{color-scheme:dark;--p:#6ab2f2;--pd:#8ec4f6;--pl:#22405c;--bg:#0e1621;--t:#f5f5f5;--t2:#8b9bab;--b:#263648;--cmb:#182533}
+html[data-theme=dark] body{background:#0e1621}
+html[data-theme=dark] #app,html[data-theme=dark] .card,html[data-theme=dark] .rh,html[data-theme=dark] #pend,html[data-theme=dark] #form,html[data-theme=dark] #rdonly,html[data-theme=dark] #editbar,html[data-theme=dark] #rbar{background:#17212b}
+html[data-theme=dark] #side{background:#17212b;border-right-color:#0a121b}
+html[data-theme=dark] .modal{background:rgba(0,0,0,.62)}
+html[data-theme=dark] .modal .card{box-shadow:0 8px 40px rgba(0,0,0,.6)}
+html[data-theme=dark] #auth{background:linear-gradient(160deg,#1c2b3b,#0e1621)}
+html[data-theme=dark] .ib:hover,html[data-theme=dark] #meBtn:hover{background:rgba(255,255,255,.08)}
+html[data-theme=dark] #q,html[data-theme=dark] .f input,html[data-theme=dark] .f textarea,html[data-theme=dark] #inp,html[data-theme=dark] .cmf input{background:#242f3d;color:var(--t)}
+html[data-theme=dark] #q:focus,html[data-theme=dark] #inp:focus{background:#1d2834}
+html[data-theme=dark] .f input:focus,html[data-theme=dark] .f textarea:focus{background:#1d2834}
+html[data-theme=dark] #q::placeholder,html[data-theme=dark] #inp::placeholder,html[data-theme=dark] .f input::placeholder,html[data-theme=dark] .cmf input::placeholder{color:#6b7b8c}
+html[data-theme=dark] .it:hover{background:#202b36}
+html[data-theme=dark] .it.on{background:#2b5278;color:#fff}
+html[data-theme=dark] .it.on .bd{background:#fff;color:#2b5278}
+html[data-theme=dark] .it.on .av i{border-color:#2b5278}
+html[data-theme=dark] .av i{border-color:#17212b}
+html[data-theme=dark] .bd{background:#4a5a6a}
+html[data-theme=dark] #wallet{background:linear-gradient(90deg,#2b2540,#3a2438);color:#f3e6ff}
+html[data-theme=dark] .btn{background:#3390ec;color:#fff}
+html[data-theme=dark] .btn:hover:not(:disabled){background:#2b7fd1}
+html[data-theme=dark] .btn.g{background:#242f3d;color:var(--p)}
+html[data-theme=dark] .btn.r{background:#3a2024;color:#ff7b7b}
+html[data-theme=dark] .err{color:#ff7b7b}
+html[data-theme=dark] .lnk:hover{background:rgba(106,178,242,.14)}
+html[data-theme=dark] #conn{background:#4a3f1a;color:#ffd866}
+html[data-theme=dark] #chat{background:#0e1621;background-image:radial-gradient(circle at 20% 15%,rgba(80,120,170,.20) 0,transparent 42%),radial-gradient(circle at 85% 80%,rgba(60,90,140,.18) 0,transparent 45%),linear-gradient(165deg,#13202e 0%,#0f1b28 45%,#0b1520 100%)}
+html[data-theme=dark] .rh{box-shadow:0 1px 10px rgba(0,0,0,.45)}
+html[data-theme=dark] #form,html[data-theme=dark] #rdonly{box-shadow:0 2px 12px rgba(0,0,0,.4)}
+html[data-theme=dark] #rdonly .btn,html[data-theme=dark] #rdonly .btn:hover:not(:disabled){background:transparent;color:var(--p)}
+html[data-theme=dark] #send{color:var(--p)}
+html[data-theme=dark] .day,html[data-theme=dark] #empty h2,html[data-theme=dark] #empty p{background:rgba(0,0,0,.4);color:#dfe6ee}
+html[data-theme=dark] .m{background:#182533;color:#f5f5f5;box-shadow:0 1px 1px rgba(0,0,0,.35)}
+html[data-theme=dark] .m.me{background:#2b5278;color:#fff}
+html[data-theme=dark] .m time{color:#7f91a4}
+html[data-theme=dark] .m.me time{color:#a9c6e2}
+html[data-theme=dark] .m.me .tk{color:#8fb8de}
+html[data-theme=dark] .m.me .tk.rd{color:#7fd1ff}
+html[data-theme=dark] .m b{color:var(--p)}
+html[data-theme=dark] .m.me b{color:#9fd0ff}
+html[data-theme=dark] .bbtn{background:rgba(106,178,242,.16);color:#8ec4f6}
+html[data-theme=dark] .bbtn:hover{background:rgba(106,178,242,.26)}
+html[data-theme=dark] .rxc{background:rgba(106,178,242,.18);color:#8ec4f6}
+html[data-theme=dark] .rxc.on{background:#3390ec;color:#fff}
+html[data-theme=dark] .m.me .rxc{background:rgba(255,255,255,.14);color:#d6e9fb}
+html[data-theme=dark] .m.me .rxc.on{background:#3390ec;color:#fff}
+html[data-theme=dark] #rbar{box-shadow:0 6px 28px rgba(0,0,0,.6)}
+html[data-theme=dark] #rbar button:hover{background:#242f3d}
+html[data-theme=dark] .gtab .gk{background:#1c2733}
+html[data-theme=dark] .bdc{background:#242f3d}
+html[data-theme=dark] .chk{background:#242f3d}
+html[data-theme=dark] .cmb{background:#242f3d}
+html[data-theme=dark] .cm{border-top-color:rgba(255,255,255,.12)}
+html[data-theme=dark] .m.me .cm{color:#9fd0ff}
+html[data-theme=dark] #acctip{background:rgba(120,130,140,.92)}
+html[data-theme=dark] ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18)}
+html[data-theme=dark] #toast{background:#2b3a4a}
+html[data-theme=dark] .gc{box-shadow:none}
+html[data-theme=dark] .gc.r-rare{box-shadow:0 0 0 2px #4a90d9 inset}
+html[data-theme=dark] .gc.r-epic{box-shadow:0 0 0 2px #a46de0 inset}
+html[data-theme=dark] .gc.r-legendary{box-shadow:0 0 0 2px #e6b830 inset,0 0 12px rgba(230,184,48,.45)}
+html[data-theme=dark] hr{border-color:#263648}
+
 /* Тонкий круглый скроллбар */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
@@ -368,6 +472,7 @@ button,input,textarea{transition:background .15s,border-color .15s,box-shadow .1
   <aside id="side">
     <div class="sh">
       <h1>SAIMONGRAM</h1>
+      <button class="ib" id="themeBtn" title="Тёмная / светлая тема">🌙</button>
       <button class="ib" id="newGroup" title="Создать группу или канал">＋</button>
       <button id="meBtn" title="Мой профиль"></button>
     </div>
@@ -421,7 +526,9 @@ let chats = new Map(), msgs = new Map(), typing = new Map(), pend = null;
 const msgsEl = $('#msgs');
 
 const setHtml = (el, html) => { if (el._h !== html) { el._h = html; el.innerHTML = html; } }; // не трогаем DOM, если ничего не изменилось
-const nmH = (name, v, extra = '') => `<span class="nm"><span class="nt">${esc(name)}${extra}</span>${v ? BADGE : ''}</span>`;
+// Подарок-аксессуар рядом с ником; по тапу показывается название и номер
+const accH = a => { if (!a) return ''; const k = kindInfo(a.kind); return `<span class="acc" data-acc="${esc(a.kind)}|${a.serial}" style="background:${giftBg(a, k)}">${k.emoji}</span>`; };
+const nmH = (name, v, extra = '', acc = null) => `<span class="nm"><span class="nt">${esc(name)}${extra}</span>${v ? BADGE : ''}${accH(acc)}</span>`;
 const api = async (url, method = 'GET', body) => {
   const r = await fetch(url, { method, headers: {'Content-Type': 'application/json', ...(me && me.token ? {Authorization: 'Bearer ' + me.token} : {})}, body: body && JSON.stringify(body) });
   const d = await r.json().catch(() => ({}));
@@ -440,7 +547,7 @@ const av = (name, seed, cls = '', on = false, img = '') =>
   `<div class="av ${cls}" style="background:linear-gradient(180deg,hsl(${hue(seed)} 65% 64%),hsl(${hue(seed)} 60% 48%))">${img ? `<img src="${esc(img)}" alt="">` : esc((name || '?')[0].toUpperCase())}${on ? '<i></i>' : ''}</div>`;
 const uav = (u, cls = '', dot = false) => av(u.username, u.id, cls, dot && u.online, u.avatar);
 const cav = (c, cls = '') => c.type !== 'direct' ? av(c.name, c.id, cls, false, c.avatar) : c.peer ? uav(c.peer, cls, true) : av('?', c.id, cls);
-const titleH = c => nmH((c.type === 'channel' ? '📢 ' : '') + title(c), c.type === 'direct' && c.peer && c.peer.verified);
+const titleH = c => nmH((c.type === 'channel' ? '📢 ' : '') + title(c), c.type === 'direct' && c.peer && c.peer.verified, '', c.type === 'direct' && c.peer ? c.peer.acc : null);
 const title = c => c.type !== 'direct' ? c.name : (c.peer ? c.peer.username : 'Удалённый аккаунт');
 
 /* ---------- Файлы ---------- */
@@ -548,6 +655,15 @@ function boot() {
   $('#app').hidden = false;
   paintMe(); setMars(me.mars || 0, me.unlimited); renderList(); connect();
 }
+const curTheme = () => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('theme', t); } catch {}
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'dark' ? '#17212b' : '#ffffff';
+  const b = $('#themeBtn'); if (b) { b.textContent = t === 'dark' ? '☀️' : '🌙'; b.title = t === 'dark' ? 'Светлая тема' : 'Тёмная тема'; }
+}
+$('#themeBtn').onclick = () => applyTheme(curTheme() === 'dark' ? 'light' : 'dark');
+applyTheme(curTheme());
 const paintMe = () => { $('#meBtn').innerHTML = uav(me, 'xs') + '<span>Профиль</span>'; };
 
 function logout(msg) {
@@ -685,6 +801,18 @@ async function onWs(m) {
       const el = cur === d.chatId && bubbleEl(d.messageId);
       if (el) setRx(el, l[i]);
     }
+  } else if (m.type === 'comments') {
+    const l = msgs.get(d.chatId), i = l ? l.findIndex(x => x.id === d.messageId) : -1;
+    if (i >= 0) {
+      l[i].cc = d.cc; l[i].ca = d.ca;
+      const el = cur === d.chatId && bubbleEl(d.messageId), row = el && el.querySelector(':scope > .cm');
+      if (row) row.outerHTML = cmRow(l[i]);
+    }
+    const c = chats.get(d.chatId);
+    if (c && c.last && c.last.id === d.messageId) { c.last.cc = d.cc; c.last.ca = d.ca; }
+    if (cmOpen && cmOpen.postId === d.messageId && $('#cml')) {
+      if (d.comment) cmAdd(d.comment); else if (d.removed) $('#cml').querySelector(`[data-c="${d.removed}"]`)?.remove();
+    }
   } else if (m.type === 'views') {
     const l = msgs.get(d.chatId);
     if (l) Object.entries(d.items).forEach(([id, v]) => {
@@ -760,7 +888,7 @@ function renderListNow() {
 <div class="lm"><span>${esc(preview(c))}</span>${n ? `<span class="bd">${n}</span>` : ''}</div></div></div>`;
   }).join('');
   const peopleHtml = people.length ? '<div class="sec">Люди</div>' + people.map(u =>
-    `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
+    `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im">${nmH(u.username, u.verified, '', u.acc)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
 
   const botHtml = sFocus && !q && botUser ? '<div class="sec">Рекомендуем</div>' +
     `<div class="it" data-u="${botUser.id}">${uav(botUser, '', false)}<div class="im">${nmH(botUser.username, true)}<div class="lm"><span>@${esc(botUser.handle)} · накрутка подписчиков на канал</span></div></div></div>` +
@@ -840,7 +968,7 @@ function renderHead() {
   const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : c.type === 'channel' ? subs(c.subscribers) : (c.peer && c.peer.bot ? 'бот' : on ? 'в сети' : 'не в сети');
   const isBot = c.type === 'direct' && c.peer && c.peer.bot;
   const iBlock = c.type === 'direct' && c.peer && blocked.has(c.peer.id);
-  const canWrite = !iBlock && !isBot && (c.type !== 'channel' || c.creator === me.id); // в канал пишет только автор
+  const canWrite = !iBlock && !isBot && (c.type !== 'channel' || c.creator === me.id || c.open); // в канал пишет только автор
   $('#form').hidden = !canWrite; $('#rdonly').hidden = canWrite;
   if (!canWrite) setHtml($('#rdonly'), isBot ? '<button type="button" class="btn" id="botstart">▶️ Старт</button>' : iBlock ? 'Вы заблокировали этого пользователя · <button class="lnk" id="unb">Разблокировать</button>' : 'Писать в канал может только его автор');
   setHtml($('#hd'), cav(c, 's') +
@@ -867,6 +995,11 @@ const mediaHtml = md => {
     : `<img class="ph" src="${esc(md.url)}" alt="Фото" loading="lazy" decoding="async" style="${ar}">`;
 };
 const btnsHtml = m => m.buttons && m.buttons.length ? '<div class="bb">' + m.buttons.map((row, r) => '<div class="br">' + row.map((b, k) => `<button type="button" class="bbtn" data-r="${r}" data-k="${k}">${esc(b.t)}</button>`).join('') + '</div>').join('') + '</div>' : '';
+const cmRow = m => {
+  if (m.pending || m.cc == null) return '';
+  const n = m.cc, avs = (m.ca || []).map(u => `<span class="cmav">${av(u.username, u.id, 's', false, u.avatar)}</span>`).join('');
+  return `<div class="cm">${avs}<span class="cmt">${n ? n + ' ' + plural(n, ['комментарий', 'комментария', 'комментариев']) : 'Оставить комментарий'}</span><span class="cmc">›</span></div>`;
+};
 const REACTS = ['👍', '❤️', '🔥', '😂', '😮', '😢', '🎉', '👎'];
 const rxHtml = m => {
   const e = Object.entries(m.reactions || {}).filter(([, a]) => a.length);
@@ -904,15 +1037,16 @@ function showRbar(el) {
 document.addEventListener('pointerdown', e => { if (!e.target.closest('#rbar')) { hideRbar(); setTimeout(() => { rbarLast = null; }, 400); } }, true);
 msgsEl.addEventListener('scroll', hideRbar, {passive: true});
 function bubbleHtml(c, l, i) {
-  const m = l[i], prev = l[i - 1], mine = m.senderId === me.id, ch = c.type === 'channel';
+  const m = l[i], prev = l[i - 1], mine = m.senderId === me.id, ch = c.type === 'channel' && !c.open; // ch — лента канала (посты); текстовый канал выглядит как группа
   let who = '';
   if (c.type === 'group' && !mine && (!prev || prev.senderId !== m.senderId)) {
     const u = c.members.find(x => x.id === m.senderId);
-    who = `<b>${esc(u ? u.username : '?')}${u && u.verified ? BADGE : ''}</b>`;
+    who = `<b>${esc(u ? u.username : '?')}${u && u.verified ? BADGE : ''}${u ? accH(u.acc) : ''}</b>`;
   }
+  if (c.type === 'channel' && c.open && !mine && m.sn && (!prev || prev.senderId !== m.senderId)) who = `<b>${esc(m.sn)}${m.sv ? BADGE : ''}${accH(m.sacc)}</b>`;
   const st = m.pending ? '<span class="tk">🕓</span>' : mine && !ch ? tick(c, m.timestamp) : '';
   const act = mine && !m.pending ? `<button class="mb" data-m="${esc(m.id)}" aria-label="Действия с сообщением">⋯</button>` : '';
-  return `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''} ${m.pending ? 'pending' : ''}" data-id="${esc(m.id)}"${m.cid ? ` data-cid="${esc(m.cid)}"` : ''}>${who}${m.gift ? giftBubble(m.gift, mine, m.text) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text && !m.gift ? `<span class="tx">${esc(m.text)}</span>` : ''}${btnsHtml(m)}${rxHtml(m)}<time>${ch && m.views != null ? `<span class="vw" data-vw>👁 ${fmtViews(m.views)}</span>` : ''}${act}${m.edited ? 'изм. ' : ''}${hm(m.timestamp)}${st}</time></div>`;
+  return `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''} ${m.pending ? 'pending' : ''}" data-id="${esc(m.id)}"${m.cid ? ` data-cid="${esc(m.cid)}"` : ''}>${who}${m.gift ? giftBubble(m.gift, mine, m.text) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text && !m.gift ? `<span class="tx">${esc(m.text)}</span>` : ''}${btnsHtml(m)}${rxHtml(m)}<time>${ch && m.views != null ? `<span class="vw" data-vw>👁 ${fmtViews(m.views)}</span>` : ''}${act}${m.edited ? 'изм. ' : ''}${hm(m.timestamp)}${st}</time>${ch ? cmRow(m) : ''}</div>`;
 }
 const dayHtml = (l, i) => !l[i - 1] || new Date(l[i - 1].timestamp).toDateString() !== new Date(l[i].timestamp).toDateString()
   ? `<div class="day">${dl(l[i].timestamp)}</div>` : '';
@@ -948,6 +1082,8 @@ msgsEl.onclick = async e => {
     } catch (x) { toast(x.message); bb.disabled = false; }
     return;
   }
+  const cm = e.target.closest('.cm');
+  if (cm) return openComments(cm.closest('.m').dataset.id);
   const rc = e.target.closest('.rxc');
   if (rc) return react(rc.closest('.m').dataset.id, rc.dataset.e);
   const gbx = e.target.closest('.gb');
@@ -1071,6 +1207,67 @@ $('#form').onsubmit = e => {
   inp.value = ''; fit(); inp.focus();
 };
 
+/* ---------- Подсказка аксессуара ---------- */
+let accT = 0;
+document.addEventListener('click', e => {
+  const a = e.target.closest('.acc');
+  $('#acctip')?.remove();
+  if (!a) return;
+  e.stopPropagation(); e.preventDefault();
+  const [kind, serial] = a.dataset.acc.split('|'), k = kindInfo(kind);
+  const tip = document.createElement('div');
+  tip.id = 'acctip'; tip.textContent = `${k.name} #${serial}`;
+  document.body.appendChild(tip);
+  const r = a.getBoundingClientRect(), w = tip.offsetWidth;
+  tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  tip.style.top = Math.max(8, r.top - tip.offsetHeight - 8) + 'px';
+  clearTimeout(accT); accT = setTimeout(() => tip.remove(), 2500);
+}, true);
+
+/* ---------- Комментарии к постам ---------- */
+let cmOpen = null;
+const cmTime = at => new Date(at).toLocaleString('ru-RU', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+function cmAdd(c) {
+  const box = $('#cml'); if (!box || box.querySelector(`[data-c="${c.id}"]`)) return;
+  box.querySelector('.cmempty')?.remove();
+  const stick = box.scrollHeight - box.scrollTop - box.clientHeight < 80 || c.userId === me.id;
+  const ch = chats.get(cmOpen.chatId), can = c.userId === me.id || (ch && ch.creator === me.id);
+  box.insertAdjacentHTML('beforeend', `<div class="cmi" data-c="${esc(c.id)}">${uav(c.u, 's')}<div class="cmb"><div class="cmn">${nmH(c.u.username, c.u.verified, '', c.u.acc)}<time>${cmTime(c.at)}</time></div><div class="cmx">${esc(c.text)}</div></div>${can ? '<button type="button" class="cmd" title="Удалить">🗑</button>' : ''}</div>`);
+  if (stick) box.scrollTop = box.scrollHeight;
+}
+async function openComments(postId) {
+  const c = chats.get(cur), post = (msgs.get(cur) || []).find(x => x.id === postId);
+  if (!c || !post) return;
+  modal(`<h2 style="margin-bottom:10px">Комментарии</h2>
+<div class="cml" id="cml"><div class="sec cmempty" style="padding:8px 0">Загрузка…</div></div>
+<form class="cmf" id="cmf"><input id="cmi" maxlength="500" placeholder="Написать комментарий…" autocomplete="off"><button class="cms" aria-label="Отправить">➤</button></form>
+<div class="err" id="cme"></div>
+<div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+  cmOpen = {chatId: c.id, postId};
+  const box = $('#cml');
+  try {
+    const d = await api(`/api/messages/${encodeURIComponent(postId)}/comments`);
+    if (!document.body.contains(box)) return;
+    box.innerHTML = '';
+    if (!d.comments.length) box.innerHTML = '<div class="sec cmempty" style="padding:8px 0">Пока нет комментариев. Будьте первым!</div>';
+    d.comments.forEach(cmAdd);
+    box.scrollTop = box.scrollHeight;
+  } catch (x) { box.innerHTML = `<div class="err">${esc(x.message)}</div>`; }
+  box.onclick = async e => {
+    const b = e.target.closest('.cmd'); if (!b || !confirm('Удалить комментарий?')) return;
+    try { await api(`/api/messages/${encodeURIComponent(postId)}/comments/${encodeURIComponent(b.closest('.cmi').dataset.c)}`, 'DELETE'); }
+    catch (x) { $('#cme').textContent = x.message; }
+  };
+  $('#cmf').onsubmit = async e => {
+    e.preventDefault();
+    const inp = $('#cmi'), text = inp.value.trim(); if (!text) return;
+    inp.value = ''; $('#cme').textContent = '';
+    try { const r = await api(`/api/messages/${encodeURIComponent(postId)}/comments`, 'POST', {text}); cmAdd(r.comment); }
+    catch (x) { inp.value = text; $('#cme').textContent = x.message; }
+  };
+  $('#cmi').focus();
+}
+
 /* ---------- Окна ---------- */
 // Окно «своё количество подписчиков» для бота
 function askCount(chanId, max, price) {
@@ -1110,7 +1307,7 @@ function picker(box, exclude) {
   const find = async () => {
     try {
       const r = (await api(`/api/users/search?q=${encodeURIComponent(input.value.replace(/^@/, ''))}&userId=${me.id}`)).filter(u => !exclude.has(u.id));
-      list.innerHTML = r.map(u => `<label class="it" style="padding:6px 0"><input type="checkbox" data-u="${u.id}" ${sel.has(u.id) ? 'checked' : ''}>${uav(u, 's')}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></label>`).join('')
+      list.innerHTML = r.map(u => `<label class="it" style="padding:6px 0"><input type="checkbox" data-u="${u.id}" ${sel.has(u.id) ? 'checked' : ''}>${uav(u, 's')}<div class="im">${nmH(u.username, u.verified, '', u.acc)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></label>`).join('')
         || '<div class="sec" style="padding-left:0">Никого не нашли</div>';
     } catch {}
   };
@@ -1129,7 +1326,7 @@ $('#meBtn').onclick = myProfile;
 function myProfile() {
   modal(`<div style="text-align:center"><div id="pav">${uav(me, 'l')}</div>
 <button class="lnk" id="pph">Сменить фото</button><button class="lnk" id="prm" ${me.avatar ? '' : 'hidden'}>Убрать</button>
-${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}${BADGE}</div>` : ''}
+<div style="font-weight:600;margin-top:2px">${esc(me.username)}${me.verified ? BADGE : ''}${accH(me.acc)}</div>
 <div style="font-weight:600;margin:4px 0">👽 <span class="mars-n">${marsTxt()}</span> Mars</div></div>
 <div class="sec" style="padding:8px 0 6px">Мои подарки</div><div class="gg" id="pgifts"></div>
 <div class="row"><button type="button" class="btn g" id="pshop">🎁 Магазин подарков</button></div>
@@ -1170,7 +1367,7 @@ ${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}
 
 function userProfile(u) {
   modal(`<div style="text-align:center">${uav(u, 'l', true)}
-<h2 style="margin-top:12px">${esc(u.username)}${u.verified ? BADGE : ''}</h2>
+<h2 style="margin-top:12px">${esc(u.username)}${u.verified ? BADGE : ''}${accH(u.acc)}</h2>
 <div style="color:var(--p)">@${esc(u.handle)}</div>
 <div style="color:var(--t2);font-size:13px">${u.online ? 'в сети' : 'не в сети'}</div>
 ${u.bio ? `<p style="margin-top:12px">${esc(u.bio)}</p>` : ''}</div>
@@ -1203,7 +1400,7 @@ function groupInfo(id) {
 <div class="sec" style="padding-left:0;margin-top:10px">Участники: ${c.members.length}</div>
 <button type="button" class="btn g" id="gadd" style="margin:4px 0 6px">＋ Добавить участников</button>
 <div style="max-height:220px;overflow:auto">${c.members.map(u =>
-  `<div class="it" data-p="${u.id}" style="padding-left:0;padding-right:0">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified, u.id === me.id ? ' (вы)' : '')}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
+  `<div class="it" data-p="${u.id}" style="padding-left:0;padding-right:0">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified, u.id === me.id ? ' (вы)' : '', u.acc)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
 <div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
 
   const patch = async body => {
@@ -1283,11 +1480,12 @@ function newChannel() {
 <div class="f"><label>Название</label><input id="cn" maxlength="40"></div>
 <div class="f"><label>Описание</label><textarea id="cd" rows="2" maxlength="200"></textarea></div>
 <div class="f"><label>Юзернейм канала (необязательно)</label><input id="chh" maxlength="21" autocapitalize="off" autocomplete="off" placeholder="латиница, цифры и _"></div>
+<label class="chk"><input type="checkbox" id="copen"><span><b>Текстовый канал</b><small>Писать могут все подписчики, как в чате. Без просмотров и комментариев.</small></span></label>
 <div class="err" id="ge"></div>
 <div class="row"><button class="btn" id="cok">Создать канал</button><button type="button" class="btn g" data-x>Отмена</button></div>`);
   $('#cok').onclick = async () => {
     try {
-      const c = await api('/api/channels', 'POST', {name: $('#cn').value, description: $('#cd').value, handle: $('#chh').value});
+      const c = await api('/api/channels', 'POST', {name: $('#cn').value, description: $('#cd').value, handle: $('#chh').value, open: $('#copen').checked});
       chats.set(c.id, c); closeModal(); openChat(c.id);
     } catch (x) { $('#ge').textContent = x.message; }
   };
@@ -1319,7 +1517,7 @@ function channelInfo(id) {
     modal(`<div style="text-align:center">${cav(c, 'l')}
 <h2 style="margin-top:12px">📢 ${esc(c.name)}</h2>
 ${c.handle ? `<div style="color:var(--p)">@${esc(c.handle)}</div>` : ''}
-<div style="color:var(--t2);font-size:13px">${subs(c.subscribers)}</div>
+<div style="color:var(--t2);font-size:13px">${subs(c.subscribers)}${c.open ? ' · писать могут все' : ''}</div>
 ${c.description ? `<p style="margin-top:12px">${esc(c.description)}</p>` : ''}</div>
 <div class="err" id="ge"></div>
 <div class="row"><button class="btn r" id="cl">Отписаться</button><button type="button" class="btn g" data-x>Закрыть</button></div>`);
@@ -1340,11 +1538,12 @@ ${c.description ? `<p style="margin-top:12px">${esc(c.description)}</p>` : ''}</
 <div class="f"><label>Название канала</label><input id="gname" value="${esc(c.name)}" maxlength="40"></div>
 <div class="f"><label>Описание</label><textarea id="gdesc" rows="2" maxlength="200">${esc(c.description)}</textarea></div>
 <div class="f"><label>Юзернейм канала</label><input id="ghandle" value="${esc(c.handle)}" maxlength="21" autocapitalize="off" autocomplete="off"></div>
+<label class="chk"><input type="checkbox" id="gopen" ${c.open ? 'checked' : ''}><span><b>Текстовый канал</b><small>Писать могут все подписчики. Просмотры и комментарии к постам отключаются.</small></span></label>
 <div class="err" id="ge"></div>
 <button class="btn">Сохранить</button></form>
 <div class="sec" style="padding-left:0;margin-top:10px">${subs(c.subscribers)}</div>
 <div style="max-height:200px;overflow:auto">${(c.members || []).map(u =>
-  `<div class="it" style="padding-left:0;padding-right:0;cursor:default">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified, u.id === me.id ? ' (вы)' : '')}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
+  `<div class="it" style="padding-left:0;padding-right:0;cursor:default">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified, u.id === me.id ? ' (вы)' : '', u.acc)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
 <div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
   const patch = async body => {
     const g = await api('/api/channels/' + encodeURIComponent(id), 'PUT', body);
@@ -1353,7 +1552,7 @@ ${c.description ? `<p style="margin-top:12px">${esc(c.description)}</p>` : ''}</
   };
   $('#gf').onsubmit = async e => {
     e.preventDefault();
-    try { await patch({name: $('#gname').value, description: $('#gdesc').value, handle: $('#ghandle').value}); closeModal(); }
+    try { await patch({name: $('#gname').value, description: $('#gdesc').value, handle: $('#ghandle').value, open: $('#gopen').checked}); closeModal(); }
     catch (x) { $('#ge').textContent = x.message; }
   };
   $('#gph').onclick = async () => {
@@ -1447,13 +1646,14 @@ async function loadCatalog() {
     backdrops = new Map((d.backdrops || []).map(b => [b.id, b]));
     setMars(d.mars, d.unlimited);
     if (cur && msgs.has(cur)) rerender(); // подарки в чате теперь рисуются с картинкой
+    renderList(); renderHead(); // аксессуары у ников
   } catch {}
 }
 
 const giftCard = g => {
   const k = kindInfo(g.kind);
   const b = bdOf(g);
-  return `<div class="gc r-${k.rarity}" data-g="${esc(g.id)}" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div>${b ? `<div class="gp">${pctTxt(b.pct)}</div>` : ''}${g.note ? '<div class="gnote" title="Есть комментарий">💬</div>' : ''}</div>`;
+  return `<div class="gc r-${k.rarity}" data-g="${esc(g.id)}" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div>${b ? `<div class="gp">${pctTxt(b.pct)}</div>` : ''}${g.note ? '<div class="gnote" title="Есть комментарий">💬</div>' : ''}${me.acc && me.acc.gid === g.id ? '<div class="gworn" title="Рядом с ником">✨</div>' : ''}</div>`;
 };
 // Подарок в переписке
 const giftBubble = (g, mine, text) => {
@@ -1526,12 +1726,21 @@ ${g.note ? `<div class="gr"><div class="gv gnv">${esc(g.note)}</div></div>` : ''
 </div>
 <div class="err" id="ge"></div>
 <div class="row"><button class="btn gok" id="gbk">OK</button></div>
-${mine ? '<div class="row"><button class="btn g gok" id="gtr">Передать</button></div>' : ''}`);
+${mine ? `<div class="row"><button class="btn g gok" id="gwr">${me.acc && me.acc.gid === g.id ? '✨ Снять с ника' : '✨ Носить рядом с ником'}</button></div><div class="row"><button class="btn g gok" id="gtr">Передать</button></div>` : ''}`);
   $('#gbk').onclick = back;
+  if (mine) $('#gwr').onclick = async () => {
+    const on = !(me.acc && me.acc.gid === g.id), b = $('#gwr'); b.disabled = true;
+    try {
+      const r = await api(`/api/gifts/${encodeURIComponent(g.id)}/wear`, 'POST', {on});
+      if (r.acc) me.acc = r.acc; else delete me.acc;
+      save(); toast(on ? 'Подарок теперь рядом с вашим ником' : 'Подарок снят с ника');
+      giftInfo(g, mine, back); renderList(); renderHead();
+    } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; b.disabled = false; }
+  };
   if (mine) $('#gtr').onclick = () => pickUser('Кому передать подарок?', u => {
     if (!confirm(`Передать «${k.name} №${g.serial}» пользователю ${u.username}? Подарок уйдёт из вашего профиля.`)) return;
     api(`/api/gifts/${encodeURIComponent(g.id)}/transfer`, 'POST', {toId: u.id})
-      .then(() => { toast('Подарок передан'); myProfile(); })
+      .then(() => { if (me.acc && me.acc.gid === g.id) { delete me.acc; save(); } toast('Подарок передан'); myProfile(); })
       .catch(x => alert(x.message));
   }, () => giftInfo(g, mine, back));
 }
@@ -1546,7 +1755,7 @@ function pickUser(titleText, onPick, back) {
   const find = async () => {
     try {
       res = await api(`/api/users/search?q=${encodeURIComponent($('#pus').value.replace(/^@/, ''))}`);
-      $('#pul').innerHTML = res.map(u => `<div class="it" data-p="${u.id}" style="padding-left:0">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')
+      $('#pul').innerHTML = res.map(u => `<div class="it" data-p="${u.id}" style="padding-left:0">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified, '', u.acc)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')
         || '<div class="sec" style="padding-left:0">Никого не нашли</div>';
     } catch {}
   };
@@ -1713,7 +1922,7 @@ async function blockedList() {
     const d = await api('/api/blocks');
     blocked = new Set(d.blocked);
     modal(`<h2 style="margin-bottom:12px">Заблокированные</h2>${d.users.length ? d.users.map(u =>
-      `<div class="it" style="padding-left:0;padding-right:0;cursor:default">${uav(u, 's')}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div><button class="lnk" data-ub="${u.id}">Разблокировать</button></div>`).join('')
+      `<div class="it" style="padding-left:0;padding-right:0;cursor:default">${uav(u, 's')}<div class="im">${nmH(u.username, u.verified, '', u.acc)}<div class="lm"><span>@${esc(u.handle)}</span></div></div><button class="lnk" data-ub="${u.id}">Разблокировать</button></div>`).join('')
       : '<div class="sec" style="padding-left:0">Список пуст</div>'}
 <div class="row"><button type="button" class="btn g" id="bkb">Назад</button></div>`);
     $('#bkb').onclick = myProfile;
@@ -1793,4 +2002,4 @@ if (window.visualViewport) {
 })();
 </script>
 </body>
-</html>
+  </html>
