@@ -4,10 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SAIMONGRAM</title>
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#17212b">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <script>
 (function(){var t;try{t=localStorage.getItem('theme')}catch(e){}
-if(t!=='dark'&&t!=='light')t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+if(t!=='dark'&&t!=='light')t='dark';
 document.documentElement.dataset.theme=t;
 var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='dark'?'#17212b':'#ffffff'})();
 </script>
@@ -423,6 +425,34 @@ html[data-theme=dark] .gc.r-epic{box-shadow:0 0 0 2px #a46de0 inset}
 html[data-theme=dark] .gc.r-legendary{box-shadow:0 0 0 2px #e6b830 inset,0 0 12px rgba(230,184,48,.45)}
 html[data-theme=dark] hr{border-color:#263648}
 
+
+/* ===== Код из письма, рынок NFT ===== */
+.cr{display:flex;gap:8px;align-items:stretch}
+.cr input{flex:1;min-width:0;letter-spacing:3px;font-size:18px;text-align:center}
+.cr .btn{width:auto;flex-shrink:0;padding:0 14px;font-size:13px;line-height:1.2}
+.mkbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+/* Рынок юзернеймов */
+.un-card{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--b);border-radius:18px;margin-bottom:10px;cursor:pointer;transition:background .15s}
+.un-card:hover{background:var(--bg2,#f4f6f8)}
+.un-av{flex-shrink:0}
+.un-body{flex:1;min-width:0}
+.un-handle{font-size:17px;font-weight:700;color:var(--t)}
+.un-also{font-size:13px;color:var(--t2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.un-also a{color:var(--p)}
+.un-price{flex-shrink:0;font-size:14px;font-weight:600;color:var(--p);white-space:nowrap}
+.un-qr{flex-shrink:0;width:36px;height:36px;opacity:.5}
+.un-my-badge{display:inline-block;font-size:11px;background:var(--p);color:#fff;border-radius:8px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+.chip{padding:7px 14px;border-radius:999px;background:var(--bg);color:var(--t);font-weight:600;font-size:13px}
+.chip.on{background:var(--p);color:#fff}
+.mkbar select{margin-left:auto;max-width:48%;padding:7px 10px;border-radius:999px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px}
+.gc .glot{position:absolute;bottom:6px;right:8px;font-size:11px;font-weight:700;background:rgba(0,0,0,.35);color:#fff;border-radius:8px;padding:0 6px;line-height:16px}
+html[data-theme=dark] .chip{background:#242f3d}
+html[data-theme=dark] .chip.on{background:#3390ec;color:#fff}
+html[data-theme=dark] .mkbar select{background:#242f3d;border-color:#263648}
+html[data-theme=dark] .un-card{border-color:#263648}
+html[data-theme=dark] .un-card:hover{background:#1c2733}
+html[data-theme=dark] .un-handle{color:#e8f0fb}
+
 /* Тонкий круглый скроллбар */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
@@ -461,6 +491,7 @@ html[data-theme=dark] hr{border-color:#263648}
     <div class="f" id="fN"><label>Имя</label><input id="an" maxlength="40" autocomplete="name"></div>
     <div class="f" id="fH"><label>Юзернейм</label><input id="ah" maxlength="21" autocapitalize="off" autocomplete="off" placeholder="латиница, цифры и _"></div>
     <div class="f"><label id="el">Email</label><input id="ae" autocapitalize="off" autocomplete="username"></div>
+    <div class="f" id="fC" hidden><label>Код из письма</label><div class="cr"><input id="ac" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 цифр"><button type="button" class="btn g" id="acs">Получить код</button></div></div>
     <div class="f"><label>Пароль</label><input id="ap" type="password" autocomplete="current-password" placeholder="Минимум 6 символов"></div>
     <div class="err" id="aerr"></div>
     <button class="btn" id="authBtn">Создать аккаунт</button>
@@ -472,6 +503,7 @@ html[data-theme=dark] hr{border-color:#263648}
   <aside id="side">
     <div class="sh">
       <h1>SAIMONGRAM</h1>
+      <button class="ib" id="pushBtn" title="Уведомления">🔕</button>
       <button class="ib" id="themeBtn" title="Тёмная / светлая тема">🌙</button>
       <button class="ib" id="newGroup" title="Создать группу или канал">＋</button>
       <button id="meBtn" title="Мой профиль"></button>
@@ -629,8 +661,10 @@ async function uploadAvatar(file) {
 
 /* ---------- Вход ---------- */
 let reg = true;
+let cfg = {emailVerify: false, vapidKey: ''};
 function authUI() {
   $('#fN').hidden = $('#fH').hidden = !reg;
+  $('#fC').hidden = !(reg && cfg.emailVerify);
   $('#el').textContent = reg ? 'Email' : 'Email или @юзернейм';
   $('#authBtn').textContent = reg ? 'Создать аккаунт' : 'Войти';
   $('#tglT').textContent = reg ? 'Уже есть аккаунт?' : 'Нет аккаунта?';
@@ -639,12 +673,25 @@ function authUI() {
   $('#ap').autocomplete = reg ? 'new-password' : 'current-password';
 }
 $('#tgl').onclick = () => { reg = !reg; authUI(); };
+fetch('/api/config').then(r => r.json()).then(c => { cfg = c; authUI(); initPush(); }).catch(() => {});
+let codeT = 0;
+function startCd(n) {
+  clearInterval(codeT);
+  const b = $('#acs'); b.disabled = true;
+  const tick = () => { if (n <= 0) { clearInterval(codeT); b.disabled = false; b.textContent = 'Отправить ещё раз'; return; } b.textContent = 'Ещё раз через ' + n + ' с'; n--; };
+  tick(); codeT = setInterval(tick, 1000);
+}
+$('#acs').onclick = async () => {
+  const b = $('#acs'); $('#aerr').textContent = ''; b.disabled = true;
+  try { await api('/api/register/code', 'POST', {email: $('#ae').value}); startCd(60); $('#ac').focus(); toast('Код отправлен на почту. Проверьте и «Спам»'); }
+  catch (x) { $('#aerr').textContent = x.message; b.disabled = false; }
+};
 $('#authForm').onsubmit = async e => {
   e.preventDefault();
   $('#aerr').textContent = '';
   try {
     const d = reg
-      ? await api('/api/register', 'POST', {username: $('#an').value, handle: $('#ah').value, email: $('#ae').value, password: $('#ap').value})
+      ? await api('/api/register', 'POST', {username: $('#an').value, handle: $('#ah').value, email: $('#ae').value, password: $('#ap').value, code: $('#ac').value})
       : await api('/api/login', 'POST', {email: $('#ae').value, password: $('#ap').value});
     me = {...d.user, token: d.token}; save(); boot();
   } catch (x) { $('#aerr').textContent = x.message; }
@@ -654,7 +701,51 @@ function boot() {
   $('#auth').hidden = true;
   $('#app').hidden = false;
   paintMe(); setMars(me.mars || 0, me.unlimited); renderList(); connect();
+  if (swReg && Notification.permission === 'granted') syncPush(); else paintBell();
 }
+/* ---------- Уведомления (Web Push) ---------- */
+const pushOK = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+let swReg = null, pendingChat = new URLSearchParams(location.search).get('chat');
+const urlB64 = s => Uint8Array.from(atob((s + '='.repeat((4 - s.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+async function paintBell() {
+  const b = $('#pushBtn'); if (!b) return;
+  let on = false;
+  try { on = pushOK && swReg && Notification.permission === 'granted' && !!await swReg.pushManager.getSubscription(); } catch {}
+  b.textContent = on ? '🔔' : '🔕'; b.title = on ? 'Уведомления включены (нажмите, чтобы выключить)' : 'Включить уведомления';
+}
+async function initPush() {
+  if (!pushOK || swReg) return paintBell();
+  try { swReg = await navigator.serviceWorker.register('/sw.js'); } catch { return; }
+  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'openChat' && e.data.chatId && me) goChat(e.data.chatId); });
+  if (me && Notification.permission === 'granted') syncPush(); else paintBell();
+}
+async function syncPush() { // подписываем это устройство на текущий аккаунт
+  if (!swReg || !cfg.vapidKey || !me) return;
+  try {
+    let sub = await swReg.pushManager.getSubscription();
+    if (!sub) sub = await swReg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: urlB64(cfg.vapidKey)});
+    await api('/api/push/subscribe', 'POST', {subscription: sub.toJSON()});
+  } catch (e) { console.warn('push:', e.message); }
+  paintBell();
+}
+async function togglePush() {
+  if (!pushOK || !swReg) return toast(/iphone|ipad/i.test(navigator.userAgent) ? 'На iPhone: «Поделиться» → «На экран Домой», затем включите уведомления в приложении' : 'Этот браузер не поддерживает уведомления');
+  if (!cfg.vapidKey) return toast('Сервер ещё не готов к уведомлениям, попробуйте позже');
+  const sub = await swReg.pushManager.getSubscription();
+  if (sub && Notification.permission === 'granted') {
+    await api('/api/push/unsubscribe', 'POST', {endpoint: sub.endpoint}).catch(() => {});
+    await sub.unsubscribe().catch(() => {});
+    paintBell(); return toast('Уведомления выключены');
+  }
+  const p = await Notification.requestPermission();
+  if (p !== 'granted') { paintBell(); return toast('Разрешите уведомления для этого сайта в настройках браузера'); }
+  await syncPush(); toast('Уведомления включены 🔔');
+}
+$('#pushBtn').onclick = togglePush;
+const goChat = async id => { if (!chats.has(id)) await loadChats(); if (chats.has(id)) openChat(id); };
+// Число непрочитанных в заголовке вкладки
+function updTitle() { let n = 0; chats.forEach(c => { n += c.unread || 0; }); document.title = (n ? `(${n > 99 ? '99+' : n}) ` : '') + 'SAIMONGRAM'; }
+
 const curTheme = () => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
@@ -667,6 +758,10 @@ applyTheme(curTheme());
 const paintMe = () => { $('#meBtn').innerHTML = uav(me, 'xs') + '<span>Профиль</span>'; };
 
 function logout(msg) {
+  if (swReg && me && me.token) { // это устройство больше не получает чужие уведомления
+    const tk = me.token;
+    swReg.pushManager.getSubscription().then(s => { if (s) { fetch('/api/push/unsubscribe', {method: 'POST', headers: {Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json'}, body: JSON.stringify({endpoint: s.endpoint})}).catch(() => {}); s.unsubscribe().catch(() => {}); } paintBell(); }).catch(() => {});
+  }
   if (me && me.token) fetch('/api/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + me.token}}).catch(() => {});
   localStorage.removeItem('ovk_user');
   me = null; cur = null; query = ''; found = []; pend = null; opened = false;
@@ -713,6 +808,7 @@ function connect() {
       if (cur) try { msgs.set(cur, await getMsgs(cur)); renderMsgs(); markRead(); } catch {}
     }
     opened = true;
+    if (pendingChat) { const id = pendingChat; pendingChat = null; history.replaceState(null, '', '/'); goChat(id); } // открыли по нажатию на уведомление
   };
   ws.onmessage = e => onWs(JSON.parse(e.data));
   ws.onclose = () => { $('#conn').hidden = false; if (me) setTimeout(connect, 2000); };
@@ -763,6 +859,7 @@ async function onWs(m) {
     if (!mine) {
       clearTimeout(typing.get(d.chatId)); typing.delete(d.chatId);
       if (cur === d.chatId && !document.hidden) markRead(); else c.unread = (c.unread || 0) + 1;
+      if (!document.hidden && cur !== d.chatId && c.type !== 'channel' && !(c.peer && c.peer.bot)) toast(`💬 ${title(c)}: ${(d.text || (d.gift ? '🎁 Подарок' : d.media ? '📷 Фото' : '')).slice(0, 60)}`);
     }
     renderList(); if (cur === d.chatId) renderHead();
   } else if (m.type === 'read') {
@@ -834,6 +931,8 @@ async function onWs(m) {
   } else if (m.type === 'error') {
     dropPending(d.cid);
     toast(d.text || 'Не удалось отправить сообщение');
+  } else if (m.type === 'sold') {
+    toast(`💰 ${d.buyer} купил «${kindInfo(d.kind).name} №${d.serial}» за ${d.price} Mars`);
   } else if (m.type === 'wallet') {
     setMars(d.mars, d.unlimited);
   } else if (m.type === 'gift') {
@@ -897,7 +996,7 @@ function renderListNow() {
     `<div class="sec">${q ? 'Ничего не найдено' : 'Чатов пока нет. Найдите человека или канал через поиск.'}</div>`);
 }
 let rl = 0; // перерисовываем не чаще раза за кадр
-function renderList() { if (!rl) rl = requestAnimationFrame(() => { rl = 0; renderListNow(); }); }
+function renderList() { if (!rl) rl = requestAnimationFrame(() => { rl = 0; renderListNow(); updTitle(); }); }
 $('#list').onclick = e => {
   const it = e.target.closest('.it');
   if (!it) return;
@@ -1330,6 +1429,7 @@ function myProfile() {
 <div style="font-weight:600;margin:4px 0">👽 <span class="mars-n">${marsTxt()}</span> Mars</div></div>
 <div class="sec" style="padding:8px 0 6px">Мои подарки</div><div class="gg" id="pgifts"></div>
 <div class="row"><button type="button" class="btn g" id="pshop">🎁 Магазин подарков</button></div>
+<div class="row"><button type="button" class="btn g" id="punm">🔤 Рынок юзернеймов</button></div>
 <div class="row"><button type="button" class="btn g" id="pbl">🚫 Заблокированные</button></div>
 <form id="pf" style="margin-top:12px">
 <div class="f"><label>Имя</label><input id="pn" value="${esc(me.username)}" maxlength="40"></div>
@@ -1361,6 +1461,7 @@ function myProfile() {
   };
   $('#lo').onclick = () => logout();
   $('#pshop').onclick = () => shop();
+  $('#punm').onclick = () => usernameMarket();
   $('#pbl').onclick = blockedList;
   loadGifts(me.id, $('#pgifts'), true);
 }
@@ -1572,7 +1673,11 @@ const RARITY = [['common', 'Обычные', 'Обычный'], ['rare', 'Ред
 const rarityName = r => (RARITY.find(x => x[0] === r) || RARITY[0])[2];
 const gradient = k => `linear-gradient(150deg,${k.bg[0]},${k.bg[1]})`;
 let backdrops = new Map(); // id -> {name, pct, c}
+let patterns = new Map();  // id -> {name, pct, symbol}
 const bdOf = g => g && g.bd && backdrops.get(g.bd);
+const ptOf = g => g && g.pt && g.pt !== 'none' && patterns.get(g.pt);
+const ptTier = p => p <= 1 ? 'Мифический' : p <= 3 ? 'Легендарный' : p <= 8 ? 'Эпический' : p <= 14 ? 'Редкий' : 'Обычный';
+const ptLine = g => { const p = ptOf(g); return p ? `Узор «${esc(p.name)}» · ${pctTxt(p.pct)} · ${ptTier(p.pct)}` : 'Без узора'; };
 // Фон конкретного подарка (если фона ещё нет — обычный цвет вида подарка)
 const giftBg = (g, k) => { const b = bdOf(g); return b ? `linear-gradient(150deg,${b.c[0]},${b.c[1]})` : gradient(k); };
 const pctTxt = p => (p < 1 ? String(p) : String(+p.toFixed(1))).replace('.', ',') + '%';
@@ -1644,16 +1749,202 @@ async function loadCatalog() {
     const d = await api('/api/shop');
     catalog = new Map(d.catalog.map(c => [c.kind, c]));
     backdrops = new Map((d.backdrops || []).map(b => [b.id, b]));
+    patterns = new Map((d.patterns || []).map(p => [p.id, p]));
     setMars(d.mars, d.unlimited);
     if (cur && msgs.has(cur)) rerender(); // подарки в чате теперь рисуются с картинкой
     renderList(); renderHead(); // аксессуары у ников
   } catch {}
 }
 
+const lotCard = g => {
+  const k = kindInfo(g.kind), b = bdOf(g);
+  return `<div class="gc r-${k.rarity}" data-l="${esc(g.id)}" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div><div class="gs">👽 ${g.listing.price}</div>${b ? `<div class="gp">${pctTxt(b.pct)}</div>` : ''}</div>`;
+};
+// -------- Рынок юзернеймов --------
+// Мини SVG QR-иконка (декоративная, как в Telegram Fragment)
+const QR_SVG = `<svg class="un-qr" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2.2"/><rect x="5" y="5" width="7" height="7" fill="currentColor"/><rect x="21" y="2" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2.2"/><rect x="24" y="5" width="7" height="7" fill="currentColor"/><rect x="2" y="21" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2.2"/><rect x="5" y="24" width="7" height="7" fill="currentColor"/><rect x="21" y="21" width="5" height="5" fill="currentColor"/><rect x="30" y="21" width="5" height="5" fill="currentColor"/><rect x="21" y="30" width="5" height="5" fill="currentColor"/><rect x="30" y="30" width="5" height="5" fill="currentColor"/></svg>`;
+
+function unCard(u, back) {
+    // «а также» — другие выставленные юзернеймы кроме текущего
+    const others = []; // можно расширить позже
+    const isMine = u.id === me.id;
+    const alsoHtml = others.length
+        ? `<div class="un-also">а также ${others.map(h => `<a>@${esc(h)}</a>`).join(', ')}</div>`
+        : '';
+    return `<div class="un-card" data-uid="${u.id}">
+  <div class="un-av">${uav(u, 'm', true)}</div>
+  <div class="un-body">
+    <div class="un-handle">@${esc(u.handle)}${isMine ? '<span class="un-my-badge">Мой</span>' : ''}</div>
+    ${alsoHtml}
+  </div>
+  <div class="un-price">👽 ${u.listing.price}</div>
+  ${QR_SVG}
+</div>`;
+}
+
+async function usernameMarket(sort = 'new', q = '') {
+    modal('<div class="sec" style="padding:0">Загрузка…</div>');
+    let list = [];
+    try { list = await api(`/api/usernames?sort=${sort}&q=${encodeURIComponent(q)}`); } catch {}
+    modal(`<h2>🔤 Рынок юзернеймов</h2>
+<div class="mkbar">
+  <button type="button" class="chip ${sort==='new'?'on':''}" data-us="new">Новые</button>
+  <button type="button" class="chip ${sort==='price'?'on':''}" data-us="price">Дешёвые</button>
+  <button type="button" class="btn g" id="umlist" style="margin-left:auto">+ Продать свой</button>
+</div>
+<div class="f" style="margin-bottom:10px"><input id="umq" placeholder="Поиск @юзернейма…" value="${esc(q)}" autocapitalize="off" autocomplete="off"></div>
+<div id="umbox">${list.length ? list.map(u => unCard(u)).join('') : '<div style="color:var(--t2);text-align:center;padding:24px 0">Пока ничего нет</div>'}</div>
+<div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+    $('#card').querySelectorAll('[data-us]').forEach(b => b.onclick = () => usernameMarket(b.dataset.us, q));
+    let searchT;
+    $('#umq').oninput = e => { clearTimeout(searchT); searchT = setTimeout(() => usernameMarket(sort, e.target.value), 400); };
+    $('#umlist').onclick = () => listMyUsername(() => usernameMarket(sort, q));
+    const box = $('#umbox');
+    if (box) box.onclick = e => {
+        const card = e.target.closest('[data-uid]');
+        if (!card) return;
+        const u = list.find(x => x.id === Number(card.dataset.uid));
+        if (u) unameInfo(u, () => usernameMarket(sort, q));
+    };
+}
+
+function listMyUsername(back) {
+    const isMine = me.uListing;
+    modal(`<h2>Продать @${esc(me.handle)}</h2>
+<p style="color:var(--t2);font-size:14px">Ваш юзернейм будет виден в каталоге. После продажи он перейдёт покупателю, а вам достанется временный.</p>
+<div class="f"><label>Цена (Mars)</label><input id="ulprice" type="number" min="1" max="10000000" placeholder="Например, 500" value="${isMine ? isMine.price : ''}"></div>
+<div class="err" id="ulerr"></div>
+<div class="row">
+  <button class="btn" id="ulok">${isMine ? 'Изменить цену' : 'Выставить'}</button>
+  ${isMine ? '<button type="button" class="btn r" id="ulun">Снять с продажи</button>' : ''}
+  <button type="button" class="btn g" data-x>Отмена</button>
+</div>`);
+    $('#ulok').onclick = async () => {
+        const price = Number($('#ulprice').value);
+        try {
+            const r = await api('/api/usernames/list', 'POST', {price});
+            me.uListing = r.listing; save();
+            toast('Юзернейм выставлен на продажу'); back();
+        } catch(x) { const e = $('#ulerr'); if(e) e.textContent = x.message; }
+    };
+    if (isMine && $('#ulun')) $('#ulun').onclick = async () => {
+        try {
+            await api('/api/usernames/unlist', 'POST', {});
+            delete me.uListing; save();
+            toast('Юзернейм снят с продажи'); back();
+        } catch(x) { alert(x.message); }
+    };
+}
+
+function unameInfo(u, back) {
+    const isMine = u.id === me.id;
+    const row = (a, v) => `<div class="gr"><div class="gk">${a}</div><div class="gv">${v}</div></div>`;
+    modal(`<div style="text-align:center;padding:10px 0 4px">
+  ${QR_SVG.replace('class="un-qr"', 'style="width:72px;height:72px;opacity:.7;margin:0 auto 10px;display:block"')}
+  <div style="font-size:28px;font-weight:800">@${esc(u.handle)}</div>
+  <div style="color:var(--t2);font-size:13px;margin-top:4px">${esc(u.username)}</div>
+</div>
+<div class="gtab">
+  ${row('Владелец', `${esc(u.username)} <span style="color:var(--t2)">@${esc(u.handle)}</span>`)}
+  ${row('Цена', `👽 ${u.listing.price} Mars`)}
+  ${row('Ваш баланс', `👽 ${marsTxt()}`)}
+</div>
+<div class="err" id="une"></div>
+${isMine
+    ? `<div class="row"><button class="btn g" id="uned">✏️ Изменить цену</button></div><div class="row"><button class="btn r" id="unun">Снять с продажи</button></div>`
+    : `<div class="row"><button class="btn" id="unbuy">Купить за ${u.listing.price} Mars</button></div>`}
+<div class="row"><button type="button" class="btn g" id="unbk">← Назад</button></div>`);
+    $('#unbk').onclick = back;
+    if (isMine) {
+        if ($('#uned')) $('#uned').onclick = () => listMyUsername(back);
+        if ($('#unun')) $('#unun').onclick = async () => {
+            try { await api('/api/usernames/unlist', 'POST', {}); delete me.uListing; save(); toast('Снято с продажи'); back(); }
+            catch(x) { const e = $('#une'); if(e) e.textContent = x.message; }
+        };
+    } else if ($('#unbuy')) {
+        $('#unbuy').onclick = async () => {
+            if (!confirm(`Купить @${u.handle} за ${u.listing.price} Mars?`)) return;
+            try {
+                const r = await api('/api/usernames/buy', 'POST', {sellerId: u.id, price: u.listing.price});
+                me = {...me, handle: r.handle, mars: r.mars, unlimited: r.unlimited};
+                delete me.uListing; save(); paintMe();
+                toast(`🎉 Юзернейм @${r.handle} теперь ваш!`); back();
+            } catch(x) { const e = $('#une'); if(e) e.textContent = x.message; }
+        };
+    }
+}
+
+async function market(sort = 'new', kind = '') {
+  modal('<div class="sec" style="padding:0">Загрузка…</div>');
+  let lots;
+  try { lots = await api(`/api/market?sort=${sort}&kind=${encodeURIComponent(kind)}`); }
+  catch (x) { modal(`<div class="err">${esc(x.message)}</div><div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`); return; }
+  modal(`<h2>🛒 Рынок NFT</h2>
+<div style="margin:6px 0 10px;font-weight:600">👽 <span class="mars-n">${marsTxt()}</span> Mars</div>
+<div class="mkbar"><button type="button" class="chip ${sort === 'new' ? 'on' : ''}" data-s="new">Новые</button><button type="button" class="chip ${sort === 'price' ? 'on' : ''}" data-s="price">Дешёвые</button><select id="mkk"><option value="">Все подарки</option>${[...catalog.values()].map(c => `<option value="${c.kind}" ${c.kind === kind ? 'selected' : ''}>${esc(c.emoji + ' ' + c.name)}</option>`).join('')}</select></div>
+${lots.length ? `<div class="gg" id="mkg">${lots.map(lotCard).join('')}</div>` : '<div class="sec" style="padding:16px 0;text-align:center">Лотов пока нет.<br>Выставьте свой подарок: профиль → подарок → «Продать».</div>'}
+<div class="row"><button type="button" class="btn g" id="mkb">← В магазин</button><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+  $('#mkb').onclick = () => shop();
+  $('#mkk').onchange = e => market(sort, e.target.value);
+  $('#card').querySelectorAll('.chip').forEach(c => c.onclick = () => market(c.dataset.s, kind));
+  const g = $('#mkg');
+  if (g) g.onclick = e => { const el = e.target.closest('[data-l]'); if (el) lotInfo(lots.find(x => x.id === el.dataset.l), () => market(sort, kind)); };
+}
+function lotInfo(g, back) {
+  if (!g) return;
+  const k = kindInfo(g.kind), bd = bdOf(g), own = g.seller && g.seller.id === me.id, price = g.listing.price;
+  const row = (a, v) => `<div class="gr"><div class="gk">${a}</div><div class="gv">${v}</div></div>`;
+  modal(`<div class="gc big" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div></div>
+<div class="gh2">👽 ${price} Mars</div>
+<div class="gtab">
+${g.seller ? row('Продавец', `${esc(g.seller.username)} <span style="color:var(--t2)">@${esc(g.seller.handle)}</span>`) : ''}
+${row('Номер', `№${g.serial}${k.supply ? ' из ' + k.supply : ''} · ${esc(rarityName(k.rarity))}`)}
+${row('Узор', ptLine(g))}
+${bd ? row('Фон', `${esc(bd.name)} · ${pctTxt(bd.pct)} · ${bdTier(bd.pct)}`) : ''}
+${row('Ваш баланс', `👽 ${marsTxt()}`)}
+</div>
+<div class="err" id="ge"></div>
+<div class="row">${own ? '<button class="btn r gok" id="lun">Снять с продажи</button>' : `<button class="btn gok" id="lby">Купить за ${price} Mars</button>`}<button type="button" class="btn g gok" id="lbk">Назад</button></div>`);
+  $('#lbk').onclick = back;
+  if (own) $('#lun').onclick = async () => {
+    try { await api('/api/market/unlist', 'POST', {giftId: g.id}); toast('Подарок снят с продажи'); back(); }
+    catch (x) { $('#ge').textContent = x.message; }
+  };
+  else $('#lby').onclick = async () => {
+    const b = $('#lby'); b.disabled = true;
+    try {
+      const r = await api('/api/market/buy', 'POST', {giftId: g.id, price});
+      setMars(r.mars, r.unlimited);
+      toast(`🎉 Куплено: ${k.name} №${g.serial}`);
+      myProfile();
+    } catch (x) { $('#ge').textContent = x.message; b.disabled = false; }
+  };
+}
+// Окно «Продать подарок»
+function askPrice(g, k, back) {
+  modal(`<h2 style="margin-bottom:6px">Продать «${esc(k.name)} №${g.serial}»</h2>
+<div style="color:var(--t2);font-size:13px;margin-bottom:12px">Подарок появится на рынке. Когда его купят, Mars придут вам, комиссии нет. Цена от 1 до 1 000 000.</div>
+<div class="f"><input id="pr" type="number" inputmode="numeric" min="1" max="1000000" placeholder="Цена в Mars" value="${g.listing ? g.listing.price : ''}" autocomplete="off"></div>
+<div class="err" id="pe"></div>
+<div class="row"><button class="btn gok" id="pok">${g.listing ? 'Изменить цену' : 'Выставить на рынок'}</button><button type="button" class="btn g gok" id="pbk">Назад</button></div>`);
+  $('#pbk').onclick = back;
+  $('#pr').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#pok').click(); } };
+  $('#pok').onclick = async () => {
+    const price = Math.floor(+$('#pr').value);
+    if (!(price >= 1 && price <= 1000000)) { $('#pe').textContent = 'Введите цену от 1 до 1 000 000'; return; }
+    $('#pok').disabled = true;
+    try {
+      await api('/api/market/list', 'POST', {giftId: g.id, price});
+      g.listing = {price}; if (me.acc && me.acc.gid === g.id) { delete me.acc; save(); }
+      toast(`Выставлено на рынок за ${price} Mars`); back();
+    } catch (x) { $('#pe').textContent = x.message; $('#pok').disabled = false; }
+  };
+  $('#pr').focus();
+}
 const giftCard = g => {
   const k = kindInfo(g.kind);
   const b = bdOf(g);
-  return `<div class="gc r-${k.rarity}" data-g="${esc(g.id)}" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div>${b ? `<div class="gp">${pctTxt(b.pct)}</div>` : ''}${g.note ? '<div class="gnote" title="Есть комментарий">💬</div>' : ''}${me.acc && me.acc.gid === g.id ? '<div class="gworn" title="Рядом с ником">✨</div>' : ''}</div>`;
+  return `<div class="gc r-${k.rarity}" data-g="${esc(g.id)}" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div>${b ? `<div class="gp">${pctTxt(b.pct)}</div>` : ''}${g.note ? '<div class="gnote" title="Есть комментарий">💬</div>' : ''}${me.acc && me.acc.gid === g.id ? '<div class="gworn" title="Рядом с ником">✨</div>' : ''}${g.listing ? `<div class="glot">💰 ${g.listing.price}</div>` : ''}</div>`;
 };
 // Подарок в переписке
 const giftBubble = (g, mine, text) => {
@@ -1721,14 +2012,22 @@ ${g.from ? row('От', `${esc(g.from.username)} <span style="color:var(--t2)">@$
 ${row('Дата', esc(when))}
 ${row('Стоимость', `👽 ${price}`)}
 ${row('Номер', `№${g.serial}${k.supply ? ' из ' + k.supply : ''} · ${esc(rarityName(k.rarity))}`)}
+${row('Узор', ptLine(g))}
 ${bd ? row('Фон', `${esc(bd.name)} · ${pctTxt(bd.pct)} · ${bdTier(bd.pct)}`) : ''}
 ${g.note ? `<div class="gr"><div class="gv gnv">${esc(g.note)}</div></div>` : ''}
 </div>
 <div class="err" id="ge"></div>
 <div class="row"><button class="btn gok" id="gbk">OK</button></div>
-${mine ? `<div class="row"><button class="btn g gok" id="gwr">${me.acc && me.acc.gid === g.id ? '✨ Снять с ника' : '✨ Носить рядом с ником'}</button></div><div class="row"><button class="btn g gok" id="gtr">Передать</button></div>` : ''}`);
+${mine ? `${g.listing ? '' : `<div class="row"><button class="btn g gok" id="gwr">${me.acc && me.acc.gid === g.id ? '✨ Снять с ника' : '✨ Носить рядом с ником'}</button></div>`}<div class="row"><button class="btn g gok" id="gsl">${g.listing ? `💰 На рынке за ${g.listing.price} Mars — изменить` : '💰 Продать на рынке'}</button></div>${g.listing ? '<div class="row"><button class="btn r gok" id="gun">Снять с продажи</button></div>' : ''}<div class="row"><button class="btn g gok" id="gtr">Передать</button></div>` : ''}`);
   $('#gbk').onclick = back;
-  if (mine) $('#gwr').onclick = async () => {
+  if (mine) {
+    $('#gsl').onclick = () => askPrice(g, k, () => giftInfo(g, mine, back));
+    if (g.listing) $('#gun').onclick = async () => {
+      try { await api('/api/market/unlist', 'POST', {giftId: g.id}); delete g.listing; toast('Подарок снят с продажи'); giftInfo(g, mine, back); }
+      catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
+    };
+  }
+  if (mine && $('#gwr')) $('#gwr').onclick = async () => {
     const on = !(me.acc && me.acc.gid === g.id), b = $('#gwr'); b.disabled = true;
     try {
       const r = await api(`/api/gifts/${encodeURIComponent(g.id)}/wear`, 'POST', {on});
@@ -1775,11 +2074,12 @@ async function shop(to) {
   catch (x) { modal(`<div class="err">${esc(x.message)}</div><div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`); return; }
   catalog = new Map(d.catalog.map(c => [c.kind, c]));
   backdrops = new Map((d.backdrops || []).map(b => [b.id, b]));
+  patterns = new Map((d.patterns || []).map(p => [p.id, p]));
   setMars(d.mars, d.unlimited);
   modal(`<h2>🎁 Магазин подарков</h2>
 <div style="margin:6px 0 4px;font-weight:600">👽 <span class="mars-n">${marsTxt()}</span> Mars</div>
 <div style="color:var(--t2);font-size:13px;margin-bottom:10px">Mars начисляются за время в приложении: ${d.perMin} в минуту, пока вкладка открыта.</div>
-${to ? `<div style="margin-bottom:10px;font-weight:600">Подарок для ${esc(to.username)}</div>` : ''}
+${to ? `<div style="margin-bottom:10px;font-weight:600">Подарок для ${esc(to.username)}</div>` : '<button type="button" class="btn g" id="mk" style="margin-bottom:10px">🛒 Рынок NFT — купить у игроков или продать свой</button>'}
 ${RARITY.map(([r, title]) => {
     const items = d.catalog.filter(c => c.rarity === r);
     return items.length ? `<div class="sec" style="padding:10px 0 6px">${title}</div><div class="gg">${items.map(c => {
@@ -1788,6 +2088,7 @@ ${RARITY.map(([r, title]) => {
     }).join('')}</div>` : '';
   }).join('')}
 <div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+  if ($('#mk')) $('#mk').onclick = () => market();
   $('#card').querySelectorAll('.gg').forEach(g => g.onclick = e => {
     const el = e.target.closest('[data-k]');
     if (el && !el.classList.contains('off')) giftBuy(el.dataset.k, to);
@@ -2002,4 +2303,4 @@ if (window.visualViewport) {
 })();
 </script>
 </body>
-  </html>
+</html>
