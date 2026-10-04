@@ -232,7 +232,7 @@ const deleteMessage = async (messageId, chatId) => {
   try {
     await api(`/api/messages/${messageId}`, 'DELETE');
     const msgs = await getMsgs(chatId);
-    renderChat(cur, msgs);
+    renderMsgs();
     toast('✅ Сообщение удалено');
   } catch (e) { alert(e.message); }
 };
@@ -243,7 +243,7 @@ const editMessage = async (messageId, currentText, chatId) => {
   try {
     await api(`/api/messages/${messageId}`, 'PUT', {text: newText});
     const msgs = await getMsgs(chatId);
-    renderChat(cur, msgs);
+    renderMsgs();
     toast('✅ Сообщение изменено');
   } catch (e) { alert(e.message); }
 };
@@ -268,12 +268,7 @@ const blockUser = async (userId) => {
   } catch (e) { alert(e.message); }
 };
 
-const toast = msg => {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.hidden = false;
-  setTimeout(() => t.hidden = true, 2500);
-};
+// toast объявлен один раз ниже (в разделе подарков)
 
 /* ---------- Аватарки ---------- */
 const hue = s => [...String(s)].reduce((a, c) => a + c.charCodeAt(0) * 31, 0) % 360;
