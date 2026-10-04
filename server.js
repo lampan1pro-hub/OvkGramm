@@ -177,8 +177,12 @@ app.get('/api/health', (req, res) => res.json({ ok: true, storage: pool ? 'datab
 // ---------- Онлайн ----------
 const sockets = new Map(); // userId -> Set<ws>
 
+// Галочка у аккаунтов с этими юзернеймами. Свой список: VERIFIED_HANDLES=saimon,durov,lesha
+const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha')
+    .split(',').map(x => x.trim().replace(/^@/, '').toLowerCase()).filter(Boolean));
+
 const pub = u => ({
-    id: u.id, username: u.username, handle: u.handle, bio: u.bio || '',
+    id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
     avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id)
 });
 const self = u => ({ ...pub(u), email: u.email });
