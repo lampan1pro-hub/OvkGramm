@@ -37,7 +37,8 @@ const F = {
     messages: path.join(DIR, 'messages.json'),
     chats: path.join(DIR, 'chats.json'),
     gifts: path.join(DIR, 'gifts.json'),
-    sessions: path.join(DIR, 'sessions.json')
+    sessions: path.join(DIR, 'sessions.json'),
+    blocks: path.join(DIR, 'blocks.json')
 };
 
 // ---- Хранение ----
@@ -209,11 +210,17 @@ const sockets = new Map(); // userId -> Set<ws>
 const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha')
     .split(',').map(x => x.trim().replace(/^@/, '').toLowerCase()).filter(Boolean));
 
+// Бесконечные Mars. Свой список: UNLIMITED_MARS_HANDLES=saimon,другой
+const UNLIMITED = new Set((process.env.UNLIMITED_MARS_HANDLES || 'saimon')
+    .split(',').map(x => x.trim().replace(/^@/, '').toLowerCase()).filter(Boolean));
+const isUnlimited = u => UNLIMITED.has(u.handle);
+const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
+
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
     avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id)
 });
-const self = u => ({ ...pub(u), email: u.email, mars: u.mars || 0 });
+const self = u => ({ ...pub(u), email: u.email, ...walletOf(u) });
 
 function sendTo(ids, payload, exceptWs) {
     const json = JSON.stringify(payload);
@@ -228,6 +235,8 @@ function broadcast(payload) {
 
 // Чат в виде, удобном клиенту. list — сообщения этого чата
 function shape(chat, me, users, list) {
+    const clr = (chat.cleared || {})[me] || ''; // «удалил чат у себя»: старые сообщения скрыты
+    if (clr) list = list.filter(m => m.timestamp > clr);
     const byId = id => users.find(u => u.id === id);
     const reads = chat.reads || {};
     const o = {
@@ -518,21 +527,12 @@ app.put('/api/channels/:id', (req, res) => {
     res.json(one(ch, me));
 });
 
-// Получить каналы пользователя (на которые подписан)
-app.get('/api/channels/:userId', (req, res) => {
-    const me = req.uid;
-    res.json(read(F.chats)
-        .filter(c => c.type === 'channel' && c.members.includes(me))
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .map(c => chanPub(c, me)));
-});
-
 // Поиск каналов по названию и @юзернейму
-app.get('/api/channels/search/:q', (req, res) => {
-    const me = req.uid, q = String(req.params.q || '').trim().toLowerCase().replace(/^@/, '');
+app.get('/api/channels/search', (req, res) => {
+    const me = req.uid, q = String(req.query.q || '').trim().toLowerCase().replace(/^@/, '');
     if (!q) return res.json([]);
     res.json(read(F.chats)
-        .filter(c => c.type === 'channel' && (c.name.toLowerCase().includes(q) || (c.handle || '').includes(q)))
+        .filter(c => c.type === 'channel' && (c.name.toLowerCase().includes(q) || (c.handle || '').includes(q) || (c.description || '').toLowerCase().includes(q)))
         .sort((a, b) => b.members.length - a.members.length)
         .slice(0, 30).map(c => chanPub(c, me)));
 });
@@ -564,50 +564,67 @@ app.post('/api/channels/:id/leave', (req, res) => {
 });
 
 // ---------- Блокировка пользователей ----------
-const F_blocks = path.join(DIR, 'blocks.json');
+const blocksOf = uid => read(F.blocks)[uid] || [];
+const iBlocked = (a, b) => blocksOf(a).includes(b);            // a заблокировал b
+const blockedEither = (a, b) => iBlocked(a, b) || iBlocked(b, a);
 
 app.post('/api/block/:userId', (req, res) => {
-    const me = req.uid, targetId = Number(req.params.userId);
-    if (me === targetId) return res.status(400).json({ error: 'Нельзя заблокировать самого себя' });
-    
-    const blocks = read(F_blocks) || {};
-    if (!blocks[me]) blocks[me] = [];
-    if (!blocks[me].includes(targetId)) blocks[me].push(targetId);
-    write(F_blocks, blocks);
-    
+    const me = req.uid, target = Number(req.params.userId);
+    if (me === target) return res.status(400).json({ error: 'Нельзя заблокировать самого себя' });
+    if (!read(F.users).some(u => u.id === target)) return res.status(404).json({ error: 'Пользователь не найден' });
+    const blocks = read(F.blocks);
+    blocks[me] = [...new Set([...(blocks[me] || []), target])];
+    write(F.blocks, blocks);
     res.json({ success: true });
 });
 
 app.post('/api/unblock/:userId', (req, res) => {
-    const me = req.uid, targetId = Number(req.params.userId);
-    const blocks = read(F_blocks) || {};
-    if (blocks[me]) {
-        blocks[me] = blocks[me].filter(id => id !== targetId);
-        write(F_blocks, blocks);
-    }
+    const me = req.uid, target = Number(req.params.userId);
+    const blocks = read(F.blocks);
+    blocks[me] = (blocks[me] || []).filter(id => id !== target);
+    write(F.blocks, blocks);
     res.json({ success: true });
 });
 
 app.get('/api/blocks', (req, res) => {
-    const me = req.uid;
-    const blocks = read(F_blocks) || {};
-    res.json({ blocked: blocks[me] || [] });
+    const ids = blocksOf(req.uid), users = read(F.users);
+    res.json({ blocked: ids, users: ids.map(id => users.find(u => u.id === id)).filter(Boolean).map(pub) });
 });
 
 // ---------- Mars и подарки ----------
 // Mars начисляются за время, проведённое в приложении (см. таймер ниже). Подарки — коллекционные:
 // у каждого свой номер (#12 из 100), у каждого есть владелец, подарок можно передать дальше.
 const MARS_PER_MIN = Number(process.env.MARS_PER_MIN) || 1;
-const ADMIN_USER = 'saimon'; // Юзер с бесконечными mars
 const CATALOG = [
-    { kind: 'heart',   emoji: '💝', name: 'Сердечко',  price: 15,   supply: 5000, bg: ['#ff9aa2', '#ff5e7e'] },
-    { kind: 'bear',    emoji: '🧸', name: 'Мишка',     price: 50,   supply: 2000, bg: ['#ffd89b', '#f2a65a'] },
-    { kind: 'rocket',  emoji: '🚀', name: 'Ракета',    price: 120,  supply: 1000, bg: ['#a1c4fd', '#5b7cfa'] },
-    { kind: 'cake',    emoji: '🎂', name: 'Торт',      price: 200,  supply: 500,  bg: ['#fbc2eb', '#d96fcf'] },
-    { kind: 'diamond', emoji: '💎', name: 'Бриллиант', price: 500,  supply: 300,  bg: ['#84fab0', '#2bb3c0'] },
-    { kind: 'crown',   emoji: '👑', name: 'Корона',    price: 1000, supply: 100,  bg: ['#f6d365', '#e8a020'] },
-    { kind: 'alien',   emoji: '👽', name: 'Марсианин', price: 2000, supply: 50,   bg: ['#b0f3a3', '#2f9e44'] },
-    { kind: 'dragon',  emoji: '🐉', name: 'Дракон',    price: 5000, supply: 10,   bg: ['#ff9966', '#c0392b'] }
+    // обычные
+    { kind: 'heart',    rarity: 'common',    emoji: '💝', name: 'Сердечко',     price: 15,    supply: 5000, bg: ['#ff9aa2', '#ff5e7e'] },
+    { kind: 'star',     rarity: 'common',    emoji: '⭐', name: 'Звезда',       price: 20,    supply: 5000, bg: ['#ffe29a', '#ffa751'] },
+    { kind: 'flower',   rarity: 'common',    emoji: '🌸', name: 'Сакура',       price: 25,    supply: 4000, bg: ['#ffd1dc', '#f78fb3'] },
+    { kind: 'coffee',   rarity: 'common',    emoji: '☕', name: 'Кофе',         price: 30,    supply: 4000, bg: ['#d7b899', '#8b5e3c'] },
+    { kind: 'pizza',    rarity: 'common',    emoji: '🍕', name: 'Пицца',        price: 40,    supply: 3000, bg: ['#ffd89b', '#e5703b'] },
+    { kind: 'bear',     rarity: 'common',    emoji: '🧸', name: 'Мишка',        price: 50,    supply: 2000, bg: ['#ffd89b', '#f2a65a'] },
+    { kind: 'cat',      rarity: 'common',    emoji: '🐱', name: 'Котик',        price: 60,    supply: 2500, bg: ['#cfd9ff', '#8e9eea'] },
+    // редкие
+    { kind: 'balloon',  rarity: 'rare',      emoji: '🎈', name: 'Шарик',        price: 80,    supply: 1500, bg: ['#ff9a9e', '#e8505b'] },
+    { kind: 'rocket',   rarity: 'rare',      emoji: '🚀', name: 'Ракета',       price: 120,   supply: 1000, bg: ['#a1c4fd', '#5b7cfa'] },
+    { kind: 'gamepad',  rarity: 'rare',      emoji: '🎮', name: 'Геймпад',      price: 150,   supply: 800,  bg: ['#a18cd1', '#5f4bb6'] },
+    { kind: 'rose',     rarity: 'rare',      emoji: '🌹', name: 'Роза',         price: 180,   supply: 700,  bg: ['#ff7e8b', '#b3123b'] },
+    { kind: 'cake',     rarity: 'rare',      emoji: '🎂', name: 'Торт',         price: 200,   supply: 500,  bg: ['#fbc2eb', '#d96fcf'] },
+    { kind: 'ghost',    rarity: 'rare',      emoji: '👻', name: 'Призрак',      price: 250,   supply: 600,  bg: ['#c9d3ff', '#7d8bd1'] },
+    // эпические
+    { kind: 'diamond',  rarity: 'epic',      emoji: '💎', name: 'Бриллиант',    price: 500,   supply: 300,  bg: ['#84fab0', '#2bb3c0'] },
+    { kind: 'unicorn',  rarity: 'epic',      emoji: '🦄', name: 'Единорог',     price: 700,   supply: 200,  bg: ['#f5a8ff', '#6fa8ff'] },
+    { kind: 'trophy',   rarity: 'epic',      emoji: '🏆', name: 'Кубок',        price: 800,   supply: 150,  bg: ['#ffe27a', '#d99a00'] },
+    { kind: 'fire',     rarity: 'epic',      emoji: '🔥', name: 'Огонь',        price: 900,   supply: 180,  bg: ['#ffb347', '#e8441c'] },
+    { kind: 'crown',    rarity: 'epic',      emoji: '👑', name: 'Корона',       price: 1000,  supply: 100,  bg: ['#f6d365', '#e8a020'] },
+    { kind: 'moon',     rarity: 'epic',      emoji: '🌙', name: 'Луна',         price: 1200,  supply: 120,  bg: ['#4b5fd6', '#1b2455'] },
+    // легендарные
+    { kind: 'alien',    rarity: 'legendary', emoji: '👽', name: 'Марсианин',    price: 2000,  supply: 50,   bg: ['#b0f3a3', '#2f9e44'] },
+    { kind: 'ufo',      rarity: 'legendary', emoji: '🛸', name: 'НЛО',          price: 3000,  supply: 30,   bg: ['#5ee7df', '#2c3e88'] },
+    { kind: 'dragon',   rarity: 'legendary', emoji: '🐉', name: 'Дракон',       price: 5000,  supply: 10,   bg: ['#ff9966', '#c0392b'] },
+    { kind: 'planet',   rarity: 'legendary', emoji: '🪐', name: 'Сатурн',       price: 8000,  supply: 7,    bg: ['#f093fb', '#5b2a86'] },
+    { kind: 'phoenix',  rarity: 'legendary', emoji: '🦅', name: 'Феникс',       price: 15000, supply: 3,    bg: ['#ffd200', '#f12711'] },
+    { kind: 'infinity', rarity: 'legendary', emoji: '♾️', name: 'Бесконечность', price: 50000, supply: 1,    bg: ['#232526', '#0f9b8e'] }
 ];
 const giftOut = (g, users) => {
     const f = users.find(u => u.id === g.fromId);
@@ -640,7 +657,7 @@ app.get('/api/shop', (req, res) => {
     const sold = {};
     read(F.gifts).forEach(g => { sold[g.kind] = (sold[g.kind] || 0) + 1; });
     const me = read(F.users).find(u => u.id === req.uid);
-    res.json({ catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), mars: me ? me.mars || 0 : 0, perMin: MARS_PER_MIN });
+    res.json({ catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), ...(me ? walletOf(me) : { mars: 0 }), perMin: MARS_PER_MIN });
 });
 
 // Подарки пользователя — видны всем, это витрина в профиле
@@ -658,28 +675,27 @@ app.post('/api/gifts/buy', async (req, res) => {
     const buyer = users.find(u => u.id === me);
     const toId = req.body.toId ? Number(req.body.toId) : me;
     if (!buyer || !users.some(u => u.id === toId)) return res.status(400).json({ error: 'Получатель не найден' });
+    if (toId !== me && blockedEither(me, toId)) return res.status(400).json({ error: 'Нельзя отправить подарок: один из вас заблокировал другого' });
 
     const minted = gifts.filter(g => g.kind === item.kind).length;
     if (minted >= item.supply) return res.status(400).json({ error: 'Этот подарок распродан' });
-    
-    // Админ saimon имеет бесконечные mars
-    const isSaimon = buyer.handle === ADMIN_USER;
-    if (!isSaimon && (buyer.mars || 0) < item.price)
+    const unlimited = isUnlimited(buyer);
+    if (!unlimited && (buyer.mars || 0) < item.price)
         return res.status(400).json({ error: `Не хватает Mars: нужно ${item.price}, у вас ${buyer.mars || 0}` });
 
     const now = new Date().toISOString();
-    if (!isSaimon) buyer.mars -= item.price;
+    if (!unlimited) buyer.mars -= item.price;
     const gift = { id: 'k_' + crypto.randomUUID(), kind: item.kind, serial: minted + 1, ownerId: toId, fromId: me, price: item.price, at: now };
     gifts.push(gift);
     write(F.users, users);
     write(F.gifts, gifts);
-    sendTo([me], { type: 'wallet', data: { mars: buyer.mars } });
+    sendTo([me], { type: 'wallet', data: walletOf(buyer) });
     if (toId !== me) {
         giftMessage(me, toId, gift, String(req.body.message || '').trim().slice(0, 120));
         sendTo([toId], { type: 'gift', data: { chatId: directId(me, toId) } });
     }
     await persist();
-    res.json({ success: true, mars: buyer.mars, gift: giftOut(gift, users) });
+    res.json({ success: true, ...walletOf(buyer), gift: giftOut(gift, users) });
 });
 
 // Передать свой подарок другому (бесплатно)
@@ -688,6 +704,7 @@ app.post('/api/gifts/:id/transfer', async (req, res) => {
     const gifts = read(F.gifts), g = gifts.find(x => x.id === req.params.id);
     if (!g || g.ownerId !== me) return res.status(403).json({ error: 'Это не ваш подарок' });
     if (toId === me || !read(F.users).some(u => u.id === toId)) return res.status(400).json({ error: 'Выберите другого получателя' });
+    if (blockedEither(me, toId)) return res.status(400).json({ error: 'Нельзя передать подарок: один из вас заблокировал другого' });
     g.ownerId = toId;
     g.fromId = me;
     g.at = new Date().toISOString();
@@ -701,74 +718,65 @@ app.get('/api/messages/:chatId', (req, res) => {
     const me = Number(req.query.userId);
     const chat = read(F.chats).find(c => String(c.id) === req.params.chatId);
     if (!chat || !chat.members.includes(me)) return res.status(403).json({ error: 'Нет доступа' });
-    res.json(read(F.messages).filter(m => m.chatId === chat.id).slice(-500));
+    const clr = (chat.cleared || {})[me] || '';
+    res.json(read(F.messages).filter(m => m.chatId === chat.id && m.timestamp > clr).slice(-500));
 });
 
 // ---------- Удаление и редактирование сообщений ----------
+const chatOf = id => read(F.chats).find(c => c.id === id);
+
 app.delete('/api/messages/:messageId', (req, res) => {
-    const me = req.uid;
-    const messages = read(F.messages);
+    const me = req.uid, messages = read(F.messages);
     const msg = messages.find(m => m.id === req.params.messageId);
-    
     if (!msg) return res.status(404).json({ error: 'Сообщение не найдено' });
-    if (msg.senderId !== me) return res.status(403).json({ error: 'Вы не можете удалить чужое сообщение' });
-    
-    const newMessages = messages.filter(m => m.id !== req.params.messageId);
-    write(F.messages, newMessages);
-    broadcast({ type: 'messageDeleted', data: { messageId: msg.id, chatId: msg.chatId } });
-    
+    if (msg.senderId !== me) return res.status(403).json({ error: 'Можно удалять только свои сообщения' });
+    write(F.messages, messages.filter(m => m !== msg));
+    const chat = chatOf(msg.chatId);
+    sendTo(chat ? chat.members : [me], { type: 'messageDeleted', data: { chatId: msg.chatId, messageId: msg.id } });
     res.json({ success: true });
 });
 
 app.put('/api/messages/:messageId', (req, res) => {
-    const me = req.uid;
-    const messages = read(F.messages);
+    const me = req.uid, messages = read(F.messages);
     const msg = messages.find(m => m.id === req.params.messageId);
-    
     if (!msg) return res.status(404).json({ error: 'Сообщение не найдено' });
-    if (msg.senderId !== me) return res.status(403).json({ error: 'Вы не можете редактировать чужое сообщение' });
-    
-    const newText = String(req.body.text || '').trim().slice(0, 4000);
-    if (!newText) return res.status(400).json({ error: 'Текст не может быть пустым' });
-    
-    msg.text = newText;
+    if (msg.senderId !== me) return res.status(403).json({ error: 'Можно изменять только свои сообщения' });
+    if (msg.gift) return res.status(400).json({ error: 'Подарок изменить нельзя' });
+    const text = String(req.body.text || '').trim().slice(0, 4000);
+    if (!text && !msg.media) return res.status(400).json({ error: 'Текст не может быть пустым' });
+    msg.text = text;
     msg.edited = new Date().toISOString();
     write(F.messages, messages);
-    broadcast({ type: 'messageEdited', data: { messageId: msg.id, chatId: msg.chatId, text: newText, edited: msg.edited } });
-    
-    res.json({ success: true, message: msg });
+    const chat = chatOf(msg.chatId);
+    sendTo(chat ? chat.members : [me], { type: 'messageEdited', data: { chatId: msg.chatId, messageId: msg.id, text, edited: msg.edited } });
+    res.json({ success: true });
 });
 
 // ---------- Удаление чатов ----------
-app.delete('/api/chats/:chatId', (req, res) => {
-    const me = req.uid;
-    const chats = read(F.chats);
-    const chat = chats.find(c => c.id === req.params.chatId);
-    
-    if (!chat) return res.status(404).json({ error: 'Чат не найдена' });
-    
-    // Только создатель канала может удалить канал
-    // Для прямых чатов - любой участник может удалить для себя
-    if (chat.type === 'channel' && chat.creator !== me) {
-        return res.status(403).json({ error: 'Только создатель может удалить канал' });
-    }
-    
-    if (chat.type === 'direct') {
-        // Для прямых чатов просто удаляем участника
+// Личный: «у меня» скрывает историю только для меня, both=1 удаляет у обоих.
+// Группа: выйти (создатель с both=1 удаляет для всех). Канал: автор удаляет, подписчик отписывается.
+app.delete('/api/chats/:chatId', async (req, res) => {
+    const me = req.uid, both = req.query.both === '1';
+    const chats = read(F.chats), chat = chats.find(c => String(c.id) === req.params.chatId);
+    if (!chat || !chat.members.includes(me)) return res.status(404).json({ error: 'Чат не найден' });
+    const members = [...chat.members];
+    const dropAll = () => {
+        write(F.chats, chats.filter(c => c !== chat));
+        write(F.messages, read(F.messages).filter(m => m.chatId !== chat.id));
+    };
+    const leave = () => {
         chat.members = chat.members.filter(id => id !== me);
-        if (chat.members.length === 0) {
-            const newChats = chats.filter(c => c.id !== req.params.chatId);
-            write(F.chats, newChats);
-        } else {
-            write(F.chats, chats);
-        }
-    } else {
-        // Удаляем весь канал
-        const newChats = chats.filter(c => c.id !== req.params.chatId);
-        write(F.chats, newChats);
-        broadcast({ type: 'chat' });
-    }
-    
+        if (chat.members.length) write(F.chats, chats); else dropAll();
+    };
+    if (chat.type === 'direct') {
+        if (both) dropAll();
+        else { chat.cleared = chat.cleared || {}; chat.cleared[me] = new Date().toISOString(); write(F.chats, chats); }
+    } else if (chat.type === 'group') {
+        if (both && chat.creator === me) dropAll(); else leave();
+    } else if (chat.creator === me) dropAll();
+    else leave();
+    sendTo(members, { type: 'chat' });
+    await persist();
     res.json({ success: true });
 });
 
@@ -792,7 +800,7 @@ wss.on('connection', ws => {
                 sockets.get(uid).add(ws);
                 broadcast({ type: 'presence', data: { userId: uid, online: true } });
                 const u = read(F.users).find(x => x.id === uid);
-                ws.send(JSON.stringify({ type: 'wallet', data: { mars: u ? u.mars || 0 : 0 } }));
+                if (u) ws.send(JSON.stringify({ type: 'wallet', data: walletOf(u) }));
                 return;
             }
             if (!uid) return;
@@ -804,6 +812,12 @@ wss.on('connection', ws => {
 
             if (m.type === 'message') {
                 if (chat.type === 'channel' && chat.creator !== uid) return; // в канал пишет только автор
+                if (chat.type === 'direct') {
+                    const other = chat.members.find(i => i !== uid);
+                    if (other && blockedEither(uid, other)) {
+                        return ws.send(JSON.stringify({ type: 'error', data: { cid: m.cid, text: iBlocked(uid, other) ? 'Вы заблокировали этого пользователя' : 'Не удалось отправить сообщение' } }));
+                    }
+                }
                 const text = String(m.text || '').trim().slice(0, 4000);
                 let media;
                 if (m.media && fileOk(m.media.url)) {
@@ -820,7 +834,7 @@ wss.on('connection', ws => {
                 const msgs = read(F.messages);
                 msgs.push(msg);
                 write(F.messages, msgs);
-                sendTo(chat.members, { type: 'message', data: msg }); // только участникам чата
+                sendTo(chat.members, { type: 'message', data: msg, cid: m.cid ? String(m.cid).slice(0, 40) : undefined }); // только участникам чата; cid — чтобы отправитель заменил своё временное сообщение
 
             } else if (m.type === 'read') {
                 // Помечаем прочитанным всё до последнего сообщения включительно
@@ -834,6 +848,7 @@ wss.on('connection', ws => {
 
             } else if (m.type === 'typing') {
                 if (chat.type === 'channel') return;
+                if (chat.type === 'direct' && blockedEither(uid, chat.members.find(i => i !== uid))) return;
                 sendTo(chat.members, { type: 'typing', data: { chatId: chat.id, userId: uid } }, ws);
             }
         } catch (err) {
@@ -871,9 +886,9 @@ setInterval(() => {
     if (!ids.size) return;
     const users = read(F.users);
     users.forEach(u => {
-        if (!ids.has(u.id)) return;
+        if (!ids.has(u.id) || isUnlimited(u)) return;
         u.mars = (u.mars || 0) + MARS_PER_MIN;
-        sendTo([u.id], { type: 'wallet', data: { mars: u.mars } });
+        sendTo([u.id], { type: 'wallet', data: walletOf(u) });
     });
     write(F.users, users);
 }, 60000);
@@ -902,10 +917,10 @@ async function init() {
         });
     }
     // Чего нет в базе (первый запуск) — берём из локальных файлов, иначе пустой список
-    for (const k of ['users', 'messages', 'chats', 'gifts', 'sessions']) {
+    for (const k of ['users', 'messages', 'chats', 'gifts', 'sessions', 'blocks']) {
         if (mem[k] === undefined) {
             const d = loadFile(F[k]);
-            mem[k] = JSON.stringify(k === 'sessions' && Array.isArray(d) ? {} : d); // сессии — объект {токен: …}
+            mem[k] = JSON.stringify((k === 'sessions' || k === 'blocks') && Array.isArray(d) ? {} : d); // объекты {токен: …}, {кто: [кого]}
             if (pool) dirty.add(k);
         }
     }
