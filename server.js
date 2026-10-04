@@ -245,6 +245,40 @@ function broadcast(payload) {
 }
 
 // Чат в виде, удобном клиенту. list — сообщения этого чата
+// Реакции и просмотры постов канала
+const REACTIONS = ['👍', '❤️', '🔥', '😂', '😮', '😢', '🎉', '👎'];
+// Наружу отдаём сообщение без служебных полей; у постов канала считаем просмотры
+// (настоящие + «накрученные» подписчики, которые просматривают пост постепенно)
+function outMsg(m, isChannel) {
+    if (!m) return m;
+    if (!m.viewers && m.fv === undefined && !isChannel) return m;
+    const { viewers, fv, ...rest } = m;
+    const age = Date.now() - new Date(m.timestamp).getTime();
+    const fake = Math.round((fv || 0) * Math.min(1, 0.25 + age / 240000));
+    return { ...rest, views: (viewers ? viewers.length : 0) + fake };
+}
+const fakeInChannel = (chat, users) => {
+    const fk = new Set(users.filter(u => u.fake).map(u => u.id));
+    return chat.members.reduce((n, id) => n + (fk.has(id) ? 1 : 0), 0);
+};
+const rollFv = n => Math.round(n * (0.35 + Math.random() * 0.5));
+// Участник открыл канал — все посты получают его просмотр
+function markViews(chat, uid) {
+    const msgs = read(F.messages);
+    let items = null, fakeN = null;
+    msgs.forEach(x => {
+        if (x.chatId !== chat.id) return;
+        let ch = false;
+        if (x.fv === undefined) { if (fakeN === null) fakeN = fakeInChannel(chat, read(F.users)); x.fv = rollFv(fakeN); ch = true; }
+        x.viewers = x.viewers || [];
+        if (!x.viewers.includes(uid)) { x.viewers.push(uid); ch = true; }
+        if (ch) (items = items || {})[x.id] = outMsg(x, true).views;
+    });
+    if (!items) return;
+    write(F.messages, msgs);
+    sendTo([...new Set([uid, chat.creator])], { type: 'views', data: { chatId: chat.id, items } });
+}
+
 function shape(chat, me, users, list) {
     const clr = (chat.cleared || {})[me] || ''; // «удалил чат у себя»: старые сообщения скрыты
     if (clr) list = list.filter(m => m.timestamp > clr);
@@ -253,7 +287,7 @@ function shape(chat, me, users, list) {
     const o = {
         id: chat.id, type: chat.type, name: chat.name, avatar: chat.avatar || '',
         creator: chat.creator, createdAt: chat.createdAt, reads,
-        last: list[list.length - 1] || null,
+        last: outMsg(list[list.length - 1] || null, chat.type === 'channel'),
         unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length
     };
     if (chat.type === 'direct') {
@@ -864,7 +898,7 @@ function pickBackdrop() {
 const giftOut = (g, users) => {
     const f = users.find(u => u.id === g.fromId);
     return {
-        id: g.id, kind: g.kind, serial: g.serial, at: g.at, bd: g.bd,
+        id: g.id, kind: g.kind, serial: g.serial, at: g.at, bd: g.bd, price: g.price, note: g.note || '',
         from: f ? { id: f.id, username: f.username, handle: f.handle, verified: VERIFIED.has(f.handle) } : null
     };
 };
@@ -921,13 +955,14 @@ app.post('/api/gifts/buy', async (req, res) => {
 
     const now = new Date().toISOString();
     if (!unlimited) buyer.mars -= item.price;
-    const gift = { id: 'k_' + crypto.randomUUID(), kind: item.kind, serial: minted + 1, ownerId: toId, fromId: me, price: item.price, at: now, bd: pickBackdrop().id };
+    const note = toId !== me ? String(req.body.message || '').trim().slice(0, 120) : '';
+    const gift = { id: 'k_' + crypto.randomUUID(), kind: item.kind, serial: minted + 1, ownerId: toId, fromId: me, price: item.price, at: now, bd: pickBackdrop().id, note };
     gifts.push(gift);
     write(F.users, users);
     write(F.gifts, gifts);
     sendTo([me], { type: 'wallet', data: walletOf(buyer) });
     if (toId !== me) {
-        giftMessage(me, toId, gift, String(req.body.message || '').trim().slice(0, 120));
+        giftMessage(me, toId, gift, note);
         sendTo([toId], { type: 'gift', data: { chatId: directId(me, toId) } });
     }
     await persist();
@@ -944,8 +979,9 @@ app.post('/api/gifts/:id/transfer', async (req, res) => {
     g.ownerId = toId;
     g.fromId = me;
     g.at = new Date().toISOString();
+    g.note = String(req.body.message || '').trim().slice(0, 120);
     write(F.gifts, gifts);
-    giftMessage(me, toId, g, String(req.body.message || '').trim().slice(0, 120));
+    giftMessage(me, toId, g, g.note);
     await persist();
     res.json({ success: true });
 });
@@ -955,7 +991,7 @@ app.get('/api/messages/:chatId', (req, res) => {
     const chat = read(F.chats).find(c => String(c.id) === req.params.chatId);
     if (!chat || !chat.members.includes(me)) return res.status(403).json({ error: 'Нет доступа' });
     const clr = (chat.cleared || {})[me] || '';
-    res.json(read(F.messages).filter(m => m.chatId === chat.id && m.timestamp > clr).slice(-500));
+    res.json(read(F.messages).filter(m => m.chatId === chat.id && m.timestamp > clr).slice(-500).map(m => outMsg(m, chat.type === 'channel')));
 });
 
 // ---------- Удаление и редактирование сообщений ----------
@@ -985,6 +1021,28 @@ app.put('/api/messages/:messageId', (req, res) => {
     write(F.messages, messages);
     const chat = chatOf(msg.chatId);
     sendTo(chat ? chat.members : [me], { type: 'messageEdited', data: { chatId: msg.chatId, messageId: msg.id, text, edited: msg.edited } });
+    res.json({ success: true });
+});
+
+// Реакция на сообщение: одна на человека; тот же смайл ещё раз — снять
+app.post('/api/messages/:messageId/react', async (req, res) => {
+    const me = req.uid, emoji = String(req.body.emoji || '');
+    if (!REACTIONS.includes(emoji)) return res.status(400).json({ error: 'Такой реакции нет' });
+    const messages = read(F.messages), msg = messages.find(m => m.id === req.params.messageId);
+    const chat = msg && chatOf(msg.chatId);
+    if (!msg || !chat || !chat.members.includes(me)) return res.status(404).json({ error: 'Сообщение не найдено' });
+    if (chat.type === 'direct') {
+        const other = chat.members.find(i => i !== me);
+        if (other === BOT_ID || (other && blockedEither(me, other))) return res.status(400).json({ error: 'Нельзя поставить реакцию' });
+    }
+    const r = msg.reactions = msg.reactions || {};
+    const had = (r[emoji] || []).includes(me);
+    for (const e of Object.keys(r)) { r[e] = r[e].filter(id => id !== me); if (!r[e].length) delete r[e]; }
+    if (!had) (r[emoji] = r[emoji] || []).push(me);
+    if (!Object.keys(r).length) delete msg.reactions;
+    write(F.messages, messages);
+    sendTo(chat.members, { type: 'reaction', data: { chatId: msg.chatId, messageId: msg.id, reactions: msg.reactions || {} } });
+    await persist();
     res.json({ success: true });
 });
 
@@ -1068,12 +1126,14 @@ wss.on('connection', ws => {
                     id: crypto.randomUUID(), chatId: chat.id, senderId: uid, text,
                     ...(media && { media }), timestamp: new Date().toISOString()
                 };
+                if (chat.type === 'channel') { msg.viewers = [uid]; msg.fv = rollFv(fakeInChannel(chat, read(F.users))); }
                 const msgs = read(F.messages);
                 msgs.push(msg);
                 write(F.messages, msgs);
-                sendTo(chat.members, { type: 'message', data: msg, cid: m.cid ? String(m.cid).slice(0, 40) : undefined }); // только участникам чата; cid — чтобы отправитель заменил своё временное сообщение
+                sendTo(chat.members, { type: 'message', data: outMsg(msg, chat.type === 'channel'), cid: m.cid ? String(m.cid).slice(0, 40) : undefined }); // только участникам чата; cid — чтобы отправитель заменил своё временное сообщение
 
             } else if (m.type === 'read') {
+                if (chat.type === 'channel') markViews(chat, uid);
                 // Помечаем прочитанным всё до последнего сообщения включительно
                 const last = read(F.messages).filter(x => x.chatId === chat.id).pop();
                 const at = last ? last.timestamp : '';
