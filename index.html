@@ -295,6 +295,23 @@ button,input,textarea{transition:background .15s,border-color .15s,box-shadow .1
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
 ::-webkit-scrollbar-track{background:transparent}
+
+/* ===== Доокругление нижних панелей (СТАРТ / «только автор» / заблокирован) и ввода ===== */
+#rdonly{border-top:0;margin:6px 10px calc(6px + env(safe-area-inset-bottom));border-radius:22px;box-shadow:0 2px 12px rgba(16,35,47,.10)}
+#rdonly .btn{border-radius:16px}
+
+/* Панель ввода — мягкие верхние углы */
+#form{border-radius:24px 24px 0 0}
+#pend{border-radius:24px 24px 0 0;border-top:0;box-shadow:0 -2px 12px rgba(16,35,47,.06)}
+#editbar{border-radius:18px 18px 0 0}
+
+/* Шапка чата — увеличиваем радиус и убираем остатки резких углов */
+.rh{border-radius:0 0 22px 22px}
+
+/* На телефоне панели чуть отступают от краёв — выглядит как «плашки» в ТГ */
+@media(max-width:768px){
+  #rdonly{margin:6px 8px calc(6px + env(safe-area-inset-bottom))}
+}
 </style>
 </head>
 <body>
