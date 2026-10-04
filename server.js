@@ -38,7 +38,8 @@ const F = {
     chats: path.join(DIR, 'chats.json'),
     gifts: path.join(DIR, 'gifts.json'),
     sessions: path.join(DIR, 'sessions.json'),
-    blocks: path.join(DIR, 'blocks.json')
+    blocks: path.join(DIR, 'blocks.json'),
+    walls: path.join(DIR, 'walls.json') // NFT-обои: коллекция экземпляров {kind, serial, ownerId}
 };
 
 // ---- Хранение ----
@@ -243,7 +244,8 @@ function shape(chat, me, users, list) {
         id: chat.id, type: chat.type, name: chat.name, avatar: chat.avatar || '',
         creator: chat.creator, createdAt: chat.createdAt, reads,
         last: list[list.length - 1] || null,
-        unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length
+        unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length,
+        wall: (chat.walls || {})[me] || null // NFT-обои, которые я поставил на этот чат
     };
     if (chat.type === 'direct') {
         const p = byId(chat.members.find(i => i !== me));
@@ -714,6 +716,99 @@ app.post('/api/gifts/:id/transfer', async (req, res) => {
     res.json({ success: true });
 });
 
+
+// ---------- NFT-обои ----------
+// Пак обоев: случайный дроп, вероятность зависит от редкости (сумма chance = 100%).
+// Каждый выпавший экземпляр уникален: у него свой серийный номер внутри вида.
+// Обои ставятся на все чаты сразу (wallDefault у пользователя) или на один чат (chat.walls[uid]).
+const WALL_PACK_PRICE = Number(process.env.WALL_PACK_PRICE ?? 200);
+const WALL_CATALOG = [
+    // обычные — падают чаще всего
+    { kind: 'aurora',  rarity: 'common',    name: 'Сияние',    chance: 16, bg: ['#43e97b', '#38f9d7'], pattern: '🌌' },
+    { kind: 'sunset',  rarity: 'common',    name: 'Закат',     chance: 15, bg: ['#ff9966', '#ff5e62'], pattern: '🌇' },
+    { kind: 'ocean',   rarity: 'common',    name: 'Океан',     chance: 14, bg: ['#2bc0e4', '#085078'], pattern: '🌊' },
+    { kind: 'sakura',  rarity: 'common',    name: 'Сакура',    chance: 10, bg: ['#f6d5f7', '#fbe9d7'], pattern: '🌸' },
+    // редкие
+    { kind: 'neon',    rarity: 'rare',      name: 'Неон',      chance: 12, bg: ['#f857a6', '#7a5cff'], pattern: '💠' },
+    { kind: 'matrix',  rarity: 'rare',      name: 'Матрица',   chance: 9,  bg: ['#000428', '#004e92'], pattern: '👾' },
+    { kind: 'lava',    rarity: 'rare',      name: 'Лава',      chance: 6,  bg: ['#e8505b', '#f7b733'], pattern: '🔥' },
+    // эпические
+    { kind: 'galaxy',  rarity: 'epic',      name: 'Галактика', chance: 7,  bg: ['#360033', '#0b8793'], pattern: '🌠' },
+    { kind: 'ice',     rarity: 'epic',      name: 'Лёд',       chance: 5,  bg: ['#83a4d4', '#b6fbff'], pattern: '❄️' },
+    // легендарные
+    { kind: 'gold',    rarity: 'legendary', name: 'Золото',    chance: 4,  bg: ['#bf953f', '#fcf6ba'], pattern: '✨' },
+    { kind: 'phoenix', rarity: 'legendary', name: 'Феникс',    chance: 2,  bg: ['#f12711', '#f5af19'], pattern: '🦅' },
+    // мифические — почти не падают
+    { kind: 'void',    rarity: 'mythic',    name: 'Пустота',   chance: 1,  bg: ['#000000', '#130f26'], pattern: '👁' }
+];
+const wallInfo = k => WALL_CATALOG.find(w => w.kind === k);
+const ownWalls = uid => read(F.walls).filter(w => w.ownerId === uid);
+const wallOwned = (uid, ref) => !!ref && ownWalls(uid).some(w => w.kind === ref.kind && w.serial === ref.serial);
+
+function rollWall() {
+    const total = WALL_CATALOG.reduce((s, w) => s + w.chance, 0);
+    let r = Math.random() * total;
+    for (const w of WALL_CATALOG) { r -= w.chance; if (r <= 0) return w; }
+    return WALL_CATALOG[0];
+}
+
+app.get('/api/walls', (req, res) => {
+    const u = read(F.users).find(x => x.id === req.uid);
+    res.json({
+        packPrice: WALL_PACK_PRICE,
+        catalog: WALL_CATALOG.map(w => ({ ...w, sold: read(F.walls).filter(x => x.kind === w.kind).length })),
+        mine: ownWalls(req.uid),
+        defaultWall: u ? (u.wallDefault || null) : null
+    });
+});
+
+// Открыть пак: списание Mars и случайный дроп с серийным номером
+app.post('/api/walls/open', async (req, res) => {
+    const users = read(F.users), u = users.find(x => x.id === req.uid);
+    if (!u) return res.status(401).json({ error: 'Войдите в аккаунт' });
+    const unl = isUnlimited(u);
+    if (!unl && (u.mars || 0) < WALL_PACK_PRICE)
+        return res.status(400).json({ error: `Не хватает Mars: нужно ${WALL_PACK_PRICE}, у вас ${u.mars || 0}` });
+    const item = rollWall();
+    const walls = read(F.walls);
+    const w = {
+        id: 'w_' + crypto.randomUUID(), kind: item.kind,
+        serial: walls.filter(x => x.kind === item.kind).length + 1,
+        ownerId: u.id, at: new Date().toISOString()
+    };
+    walls.push(w);
+    if (!unl) u.mars -= WALL_PACK_PRICE;
+    write(F.walls, walls);
+    write(F.users, users);
+    sendTo([u.id], { type: 'wallet', data: walletOf(u) });
+    await persist();
+    res.json({ success: true, ...walletOf(u), wall: { ...w, info: item } });
+});
+
+// Обои по умолчанию — на все чаты, где нет своих
+app.put('/api/walls/default', (req, res) => {
+    const users = read(F.users), u = users.find(x => x.id === req.uid);
+    if (!u) return res.status(401).json({ error: 'Войдите в аккаунт' });
+    const ref = req.body.wall || null;
+    if (ref && !wallOwned(u.id, ref)) return res.status(400).json({ error: 'Этих обоев нет в вашей коллекции' });
+    u.wallDefault = ref;
+    write(F.users, users);
+    res.json({ success: true, defaultWall: ref });
+});
+
+// Обои конкретного чата/канала (видит только тот, кто поставил)
+app.put('/api/chats/:chatId/wall', (req, res) => {
+    const chats = read(F.chats);
+    const chat = chats.find(c => String(c.id) === req.params.chatId);
+    if (!chat || !chat.members.includes(req.uid)) return res.status(403).json({ error: 'Нет доступа' });
+    const ref = req.body.wall || null;
+    if (ref && !wallOwned(req.uid, ref)) return res.status(400).json({ error: 'Этих обоев нет в вашей коллекции' });
+    chat.walls = chat.walls || {};
+    if (ref) chat.walls[req.uid] = ref; else delete chat.walls[req.uid];
+    write(F.chats, chats);
+    res.json({ success: true });
+});
+
 app.get('/api/messages/:chatId', (req, res) => {
     const me = Number(req.query.userId);
     const chat = read(F.chats).find(c => String(c.id) === req.params.chatId);
@@ -917,7 +1012,7 @@ async function init() {
         });
     }
     // Чего нет в базе (первый запуск) — берём из локальных файлов, иначе пустой список
-    for (const k of ['users', 'messages', 'chats', 'gifts', 'sessions', 'blocks']) {
+    for (const k of ['users', 'messages', 'chats', 'gifts', 'sessions', 'blocks', 'walls']) {
         if (mem[k] === undefined) {
             const d = loadFile(F[k]);
             mem[k] = JSON.stringify((k === 'sessions' || k === 'blocks') && Array.isArray(d) ? {} : d); // объекты {токен: …}, {кто: [кого]}
