@@ -38,8 +38,7 @@ const F = {
     chats: path.join(DIR, 'chats.json'),
     gifts: path.join(DIR, 'gifts.json'),
     sessions: path.join(DIR, 'sessions.json'),
-    blocks: path.join(DIR, 'blocks.json'),
-    walls: path.join(DIR, 'walls.json') // NFT-обои: коллекция экземпляров {kind, serial, ownerId}
+    blocks: path.join(DIR, 'blocks.json')
 };
 
 // ---- Хранение ----
@@ -208,7 +207,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, storage: pool ? 'datab
 const sockets = new Map(); // userId -> Set<ws>
 
 // Галочка у аккаунтов с этими юзернеймами. Свой список: VERIFIED_HANDLES=saimon,durov,lesha
-const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha,NAKRYTKA_BOT')
+const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha')
     .split(',').map(x => x.trim().replace(/^@/, '').toLowerCase()).filter(Boolean));
 
 // Бесконечные Mars. Свой список: UNLIMITED_MARS_HANDLES=saimon,другой
@@ -219,7 +218,7 @@ const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
 
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
-    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), bot: !!u.isBot
+    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), ...(u.bot && { bot: true })
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u) });
 
@@ -244,8 +243,7 @@ function shape(chat, me, users, list) {
         id: chat.id, type: chat.type, name: chat.name, avatar: chat.avatar || '',
         creator: chat.creator, createdAt: chat.createdAt, reads,
         last: list[list.length - 1] || null,
-        unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length,
-        wall: (chat.walls || {})[me] || null // NFT-обои, которые я поставил на этот чат
+        unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length
     };
     if (chat.type === 'direct') {
         const p = byId(chat.members.find(i => i !== me));
@@ -319,7 +317,7 @@ app.post('/api/login', async (req, res) => {
     const login = String(req.body.email || '').trim().toLowerCase().replace(/^@/, '');
     const password = String(req.body.password || '');
     const users = read(F.users);
-    const user = users.find(u => ((u.email || '').toLowerCase() === login || u.handle === login) && checkPass(password, u.password));
+    const user = users.find(u => !u.bot && !u.fake && ((u.email || '').toLowerCase() === login || u.handle === login) && checkPass(password, u.password));
     if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
     if (!isHash(user.password)) { user.password = hashPass(password); write(F.users, users); }
     const token = newSession(user.id);
@@ -339,7 +337,7 @@ app.get('/api/users/search', (req, res) => {
     const s = String(req.query.q || '').toLowerCase().replace(/^@/, '');
     const me = Number(req.query.userId);
     res.json(read(F.users)
-        .filter(u => u.id !== me && (u.handle.includes(s) || u.username.toLowerCase().includes(s)))
+        .filter(u => !u.fake && u.id !== me && (u.handle.includes(s) || u.username.toLowerCase().includes(s)))
         .slice(0, 30).map(pub));
 });
 
@@ -406,14 +404,6 @@ app.post('/api/chats', (req, res) => {
         chat = { id: directId(me, peer), type: 'direct', members: [me, peer], reads: {}, createdAt: new Date().toISOString() };
         chats.push(chat);
         write(F.chats, chats);
-        const peerU = users.find(u => u.id === peer);
-        if (peerU && peerU.isBot) {
-            const msgs = read(F.messages);
-            msgs.push({ id: crypto.randomUUID(), chatId: chat.id, senderId: peer,
-                text: `👋 Привет! Я бот накрутки подписчиков.\nНажми «▶️ Старт» внизу, выбери канал и количество — 1 подписчик = ${BOOST_PRICE} Mars. Подписчики появятся в твоём канале, как настоящие.`,
-                timestamp: new Date().toISOString() });
-            write(F.messages, msgs);
-        }
     }
     res.json(one(chat, me));
 });
@@ -573,6 +563,180 @@ app.post('/api/channels/:id/leave', (req, res) => {
     res.json({ success: true });
 });
 
+
+// ---------- Бот ЮЗ (@nakrytka_bot): накрутка подписчиков ----------
+// Пользователь выбирает свой канал и пакет, платит Mars, а в канал добавляются подписчики с случайными никами.
+const BOT_ID = 100;                       // id пользователей — Date.now(), так что не пересекается
+const BOT_HANDLE = 'nakrytka_bot';
+const SUB_PRICE = Number(process.env.SUB_PRICE) || 3;      // Mars за одного подписчика
+const PACKS = [10, 50, 100, 500, 1000];                    // доступные пакеты
+VERIFIED.add(BOT_HANDLE);
+
+function ensureBot() {
+    const users = read(F.users);
+    if (users.some(u => u.id === BOT_ID)) return;
+    users.push({
+        id: BOT_ID, username: 'ЮЗ', handle: BOT_HANDLE, bot: true, bio: 'Накрутка подписчиков на ваш канал',
+        avatar: '', mars: 0, password: 'x' + crypto.randomBytes(24).toString('hex'), createdAt: new Date().toISOString()
+    });
+    write(F.users, users);
+}
+
+// Случайные ники для «подписчиков»
+const N_RU = ['Иван','Алексей','Дмитрий','Максим','Артём','Никита','Егор','Кирилл','Андрей','Сергей','Данил','Илья','Роман','Павел','Тимур','Мария','Анна','Елена','Дарья','Алина','Полина','Софья','Виктория','Ксения','Юлия','Анастасия','Вероника','Кристина','Диана','Ольга'];
+const N_EN = ['ivan','alex','dima','max','artem','nikita','egor','kirill','andrey','serg','danil','ilya','roman','pavel','timur','maria','anna','lena','dasha','alina','polina','sofia','vika','ksenia','yulia','nastya','nika','kris','diana','olga'];
+const SURN = ['Иванов','Петров','Смирнов','Кузнецов','Попов','Соколов','Лебедев','Козлов','Новиков','Морозов','Волков','Фёдоров','Орлов','Белов','Громов','Зайцев','Крылов','Левин','Мельник','Тихонов'];
+const TAIL = ['pro','official','real','top','love','life','vibe','mood','live','one','zone','star','boy','girl','cool','new','play','fox','wolf','sky'];
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+
+let lastFakeId = 0;
+function fakeUser(taken) {
+    const i = Math.floor(Math.random() * N_RU.length);
+    const style = Math.random();
+    const username = style < .35 ? N_RU[i] : style < .65 ? `${N_RU[i]} ${pick(SURN)}` : style < .85 ? N_EN[i][0].toUpperCase() + N_EN[i].slice(1) : `${N_EN[i]}_${pick(TAIL)}`;
+    let handle;
+    do {
+        const base = N_EN[i], r = Math.random();
+        handle = r < .4 ? `${base}${rnd(1, 9999)}` : r < .7 ? `${base}_${pick(TAIL)}${rnd(1, 99)}` : `${pick(TAIL)}_${base}${rnd(10, 999)}`;
+        handle = handle.slice(0, 20);
+    } while (taken.has(handle) || !HANDLE_RE.test(handle));
+    taken.add(handle);
+    return {
+        id: (lastFakeId = Math.max(lastFakeId + 1, Date.now() * 1000)), // уникальный и не пересекается с настоящими (там Date.now())
+        username, handle, fake: true, bio: '', avatar: '', mars: 0,
+        password: 'x' + crypto.randomBytes(16).toString('hex'),
+        createdAt: new Date(Date.now() - rnd(1, 400) * 86400000 - rnd(0, 86400000)).toISOString()
+    };
+}
+
+// Сообщения в личке с ботом
+function botChat(uid) {
+    const chats = read(F.chats), id = directId(uid, BOT_ID);
+    let chat = chats.find(c => c.id === id);
+    if (!chat) {
+        chat = { id, type: 'direct', members: [uid, BOT_ID], reads: {}, createdAt: new Date().toISOString() };
+        chats.push(chat);
+        write(F.chats, chats);
+        sendTo([uid], { type: 'chat' });
+    }
+    return chat;
+}
+function postBot(uid, from, text, buttons) {
+    const chat = botChat(uid);
+    const msg = { id: crypto.randomUUID(), chatId: chat.id, senderId: from, text, timestamp: new Date().toISOString(), ...(buttons && { buttons }) };
+    const msgs = read(F.messages);
+    msgs.push(msg);
+    write(F.messages, msgs);
+    // бот «прочитал» всё сразу — у пользователя две галочки
+    const chats = read(F.chats), c = chats.find(x => x.id === chat.id);
+    c.reads = c.reads || {};
+    c.reads[BOT_ID] = msg.timestamp;
+    write(F.chats, chats);
+    sendTo([uid], { type: 'message', data: msg });
+    sendTo([uid], { type: 'read', data: { chatId: chat.id, userId: BOT_ID, at: c.reads[BOT_ID] } });
+    return msg;
+}
+const say = (uid, text, buttons) => postBot(uid, BOT_ID, text, buttons);
+const youSay = (uid, text) => postBot(uid, uid, text);
+
+const btn = (t, a, v = '') => ({ t, a, v });
+const subWord = n => { const m = n % 100, d = n % 10; return m > 10 && m < 15 ? 'подписчиков' : d === 1 ? 'подписчик' : d > 1 && d < 5 ? 'подписчика' : 'подписчиков'; };
+
+function menuFor(uid) {
+    const mine = read(F.chats).filter(c => c.type === 'channel' && c.creator === uid);
+    if (!mine.length) {
+        return say(uid, '👋 Привет! Я ЮЗ — накручиваю подписчиков на каналы.\n\nУ вас пока нет своего канала. Создайте канал и нажмите «Старт» снова.', [[btn('🔄 Проверить снова', 'start')]]);
+    }
+    const rows = mine.slice(0, 20).map(c => [btn(`📢 ${c.name} · ${c.members.length}`, 'chan', c.id)]);
+    say(uid, `👋 Привет! Я ЮЗ — накручиваю подписчиков на каналы.\n💰 1 подписчик = ${SUB_PRICE} Mars\n\nВыберите канал:`, rows);
+}
+
+function packsFor(uid, chan) {
+    const rows = PACKS.map(n => [btn(`${n} ${subWord(n)} — ${n * SUB_PRICE} Mars`, 'pack', `${chan.id}|${n}`)]);
+    rows.push([btn('⬅️ Назад', 'start')]);
+    say(uid, `Канал «${chan.name}»\nСейчас подписчиков: ${chan.members.length}\n\nСколько подписчиков добавить?`, rows);
+}
+
+// Все действия бота. Кнопки проверяются по тому, что бот сам выдал, цена считается на сервере.
+async function handleBotClick(uid, a, v) {
+    const users = read(F.users), me = users.find(u => u.id === uid);
+    if (a === 'start') return menuFor(uid);
+
+    if (a === 'chan') {
+        const chan = read(F.chats).find(c => c.id === v && c.type === 'channel' && c.creator === uid);
+        if (!chan) return say(uid, 'Канал не найден.', [[btn('⬅️ В меню', 'start')]]);
+        youSay(uid, `📢 ${chan.name}`);
+        return packsFor(uid, chan);
+    }
+
+    const [chanId, nStr] = String(v).split('|'), n = Number(nStr);
+    const chats = read(F.chats), chan = chats.find(c => c.id === chanId && c.type === 'channel' && c.creator === uid);
+    if (!chan || !PACKS.includes(n)) return say(uid, 'Что-то пошло не так. Начните заново.', [[btn('⬅️ В меню', 'start')]]);
+    const price = n * SUB_PRICE;
+
+    if (a === 'pack') {
+        youSay(uid, `${n} ${subWord(n)}`);
+        const bal = isUnlimited(me) ? '∞' : (me.mars || 0);
+        return say(uid, `🧾 Заказ\nКанал: «${chan.name}»\nПодписчиков: ${n}\nК оплате: ${price} Mars\nВаш баланс: ${bal} Mars`,
+            [[btn(`✅ Оплатить ${price} Mars`, 'pay', v)], [btn('❌ Отмена', 'start')]]);
+    }
+
+    if (a === 'pay') {
+        youSay(uid, `✅ Оплатить ${price} Mars`);
+        const unlimited = isUnlimited(me);
+        if (!unlimited && (me.mars || 0) < price) {
+            return say(uid, `Не хватает Mars: нужно ${price}, у вас ${me.mars || 0}.\nMars начисляются за время в приложении.`, [[btn('⬅️ В меню', 'start')]]);
+        }
+        const fresh = read(F.chats), ch = fresh.find(c => c.id === chan.id); // youSay уже менял чаты — берём актуальные
+        // подписчики: переиспользуем уже созданные аккаунты, недостающих создаём
+        const have = new Set(ch.members);
+        const taken = new Set(users.map(u => u.handle));
+        const pool = users.filter(u => u.fake && !have.has(u.id));
+        for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+        const chosen = pool.slice(0, n);
+        while (chosen.length < n) { const f = fakeUser(taken); users.push(f); chosen.push(f); }
+
+        if (!unlimited) me.mars -= price;
+        ch.members.push(...chosen.map(u => u.id));
+        ch.reads = ch.reads || {};
+        const last = read(F.messages).filter(m => m.chatId === ch.id).pop();
+        chosen.forEach(u => { ch.reads[u.id] = last ? last.timestamp : ''; });
+        write(F.users, users);
+        write(F.chats, fresh);
+        sendTo([uid], { type: 'wallet', data: walletOf(me) });
+        sendTo([uid], { type: 'chat' }); // обновится число подписчиков
+        say(uid, `🎉 Готово! В канал «${ch.name}» добавлено ${n} ${subWord(n)}.\nТеперь в канале ${ch.members.length}.\nСписано: ${price} Mars`, [[btn('🔁 Заказать ещё', 'start')]]);
+        return persist();
+    }
+}
+
+// «Старт» внизу чата с ботом
+app.post('/api/bot/start', async (req, res) => {
+    const uid = req.uid;
+    if (!read(F.users).some(u => u.id === uid)) return res.status(401).json({ error: 'Войдите в аккаунт' });
+    youSay(uid, '/start');
+    menuFor(uid);
+    await persist();
+    res.json({ success: true });
+});
+
+// Нажатие кнопки в сообщении бота
+app.post('/api/bot/click', async (req, res) => {
+    const uid = req.uid;
+    const msgs = read(F.messages);
+    const msg = msgs.find(m => m.id === String(req.body.messageId) && m.senderId === BOT_ID && m.chatId === directId(uid, BOT_ID));
+    const b = msg && msg.buttons && (msg.buttons[Number(req.body.row)] || [])[Number(req.body.col)];
+    if (!b) return res.status(400).json({ error: 'Кнопка устарела' });
+    msg.buttons = []; // нажатое меню гасим: второй раз нажать нельзя (защита от двойной оплаты)
+    write(F.messages, msgs);
+    sendTo([uid], { type: 'botUpdate', data: { chatId: msg.chatId, messageId: msg.id, buttons: [] } });
+    try { await handleBotClick(uid, b.a, b.v); }
+    catch (e) { console.error('bot:', e); say(uid, 'Ошибка, попробуйте ещё раз.', [[btn('⬅️ В меню', 'start')]]); }
+    await persist();
+    res.json({ success: true });
+});
+
 // ---------- Блокировка пользователей ----------
 const blocksOf = uid => read(F.blocks)[uid] || [];
 const iBlocked = (a, b) => blocksOf(a).includes(b);            // a заблокировал b
@@ -667,7 +831,7 @@ app.get('/api/shop', (req, res) => {
     const sold = {};
     read(F.gifts).forEach(g => { sold[g.kind] = (sold[g.kind] || 0) + 1; });
     const me = read(F.users).find(u => u.id === req.uid);
-    res.json({ catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), ...(me ? walletOf(me) : { mars: 0 }), perMin: MARS_PER_MIN, boostPrice: BOOST_PRICE });
+    res.json({ catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), ...(me ? walletOf(me) : { mars: 0 }), perMin: MARS_PER_MIN });
 });
 
 // Подарки пользователя — видны всем, это витрина в профиле
@@ -685,6 +849,7 @@ app.post('/api/gifts/buy', async (req, res) => {
     const buyer = users.find(u => u.id === me);
     const toId = req.body.toId ? Number(req.body.toId) : me;
     if (!buyer || !users.some(u => u.id === toId)) return res.status(400).json({ error: 'Получатель не найден' });
+    if (toId === BOT_ID) return res.status(400).json({ error: 'Боту нельзя дарить подарки' });
     if (toId !== me && blockedEither(me, toId)) return res.status(400).json({ error: 'Нельзя отправить подарок: один из вас заблокировал другого' });
 
     const minted = gifts.filter(g => g.kind === item.kind).length;
@@ -721,194 +886,6 @@ app.post('/api/gifts/:id/transfer', async (req, res) => {
     write(F.gifts, gifts);
     giftMessage(me, toId, g, String(req.body.message || '').trim().slice(0, 120));
     await persist();
-    res.json({ success: true });
-});
-
-
-
-// ---------- Бот накрутки NAKRYTKA_BOT ----------
-// Обычный пользователь с флагом isBot: находится в поиске, виден в списке подписчиков,
-// онлайн не бывает. За Mars создаёт аккаунты со случайными никами и подписывает на канал.
-const BOOST_PRICE = Number(process.env.BOOST_PRICE ?? 3); // Mars за одного подписчика
-const BOT_HANDLE = 'NAKRYTKA_BOT';
-const MAX_BOTS = 20000; // потолок, чтобы база не разрасталась бесконечно
-const NICK_A = ['Cool','Super','Mega','Pro','Lucky','Crazy','Happy','Neon','Cyber','Dark','Swift','Clever','Cosmic','Royal','Iron','Wild','Silent','Golden','Pixel','Turbo'];
-const NICK_B = ['Fox','Wolf','Bear','Cat','Dragon','Tiger','Hawk','Shark','Panda','Robot','Wizard','Ninja','Phoenix','Raccoon','Owl','Viper','Falcon','Whale','Raven','Crow'];
-const botUser = () => read(F.users).find(u => u.handle === BOT_HANDLE);
-
-function ensureBot() {
-    const users = read(F.users);
-    if (users.some(u => u.handle === BOT_HANDLE)) return;
-    users.push({
-        id: Date.now(), username: 'Накрутка 🤖', handle: BOT_HANDLE,
-        email: 'nakrytka@bot.local', password: hashPass(crypto.randomBytes(16).toString('hex')),
-        bio: `Бот накрутки подписчиков · 1 подписчик = ${BOOST_PRICE} Mars`,
-        avatar: '', mars: 0, isBot: true, createdAt: new Date().toISOString()
-    });
-    write(F.users, users);
-    console.log('🤖 Бот накрутки создан: @' + BOT_HANDLE);
-}
-
-app.post('/api/boost', async (req, res) => {
-    const chId = String(req.body.channelId || '');
-    const count = Math.floor(Number(req.body.count));
-    const chats = read(F.chats);
-    const ch = chats.find(c => c.id === chId && c.type === 'channel');
-    if (!ch || ch.creator !== req.uid) return res.status(400).json({ error: 'Выберите свой канал' });
-    if (!(count >= 1)) return res.status(400).json({ error: 'Минимум 1 подписчик' });
-    if (count > 500) return res.status(400).json({ error: 'За раз можно добавить не больше 500 подписчиков' });
-
-    const users = read(F.users);
-    const buyer = users.find(u => u.id === req.uid);
-    const bot = botUser();
-    if (!bot) return res.status(500).json({ error: 'Бот не найден' });
-    const cost = count * BOOST_PRICE;
-    const unl = isUnlimited(buyer);
-    if (!unl && (buyer.mars || 0) < cost) return res.status(400).json({ error: `Не хватает Mars: нужно ${cost}, у вас ${buyer.mars || 0}` });
-    if (users.filter(u => u.isBot).length + count > MAX_BOTS) return res.status(400).json({ error: 'Лимит подписчиков исчерпан, попробуйте меньше' });
-
-    // Случайные ники, как у живых: Прилагательное + Существо + цифры
-    const handles = new Set(users.map(u => u.handle));
-    const fresh = [];
-    for (let i = 0; i < count; i++) {
-        let a, b, handle;
-        do {
-            a = NICK_A[Math.floor(Math.random() * NICK_A.length)];
-            b = NICK_B[Math.floor(Math.random() * NICK_B.length)];
-            handle = (a + b + '_' + Math.floor(1000 + Math.random() * 9000)).toLowerCase();
-        } while (handles.has(handle));
-        handles.add(handle);
-        fresh.push({
-            id: Date.now() + Math.floor(Math.random() * 1e6) + i,
-            username: a + ' ' + b, handle,
-            email: handle + '@bot.local', password: hashPass(crypto.randomBytes(16).toString('hex')),
-            bio: '', avatar: '', mars: 0, isBot: true, createdAt: new Date().toISOString()
-        });
-    }
-
-    users.push(...fresh);
-    // Новые подписчики не «непрочитанные»: история для них уже прочитана
-    const last = read(F.messages).filter(m => m.chatId === ch.id).pop();
-    ch.reads = ch.reads || {};
-    fresh.forEach(u => { ch.reads[u.id] = last ? last.timestamp : ''; ch.members.push(u.id); });
-    if (!unl) buyer.mars -= cost;
-    write(F.users, users);
-    write(F.chats, chats);
-
-    // Подтверждение от бота в личном чате с покупателем
-    const bchatId = directId(bot.id, buyer.id);
-    let bchat = read(F.chats).find(c => c.id === bchatId);
-    if (!bchat) {
-        const chats2 = read(F.chats);
-        bchat = { id: bchatId, type: 'direct', members: [bot.id, buyer.id], reads: {}, createdAt: new Date().toISOString() };
-        chats2.push(bchat);
-        write(F.chats, chats2);
-    }
-    const msg = {
-        id: crypto.randomUUID(), chatId: bchatId, senderId: bot.id,
-        text: `✅ Готово! Начислено ${count} подписчиков на канал «${ch.name}». Списано 👽 ${cost} Mars.`,
-        timestamp: new Date().toISOString()
-    };
-    const msgs = read(F.messages);
-    msgs.push(msg);
-    write(F.messages, msgs);
-
-    sendTo([buyer.id], { type: 'message', data: msg });
-    sendTo(ch.members, { type: 'chat' }); // у всех обновится число подписчиков
-    sendTo([buyer.id], { type: 'wallet', data: walletOf(buyer) });
-    await persist();
-    res.json({ success: true, added: count, cost, ...walletOf(buyer) });
-});
-
-// ---------- NFT-обои ----------
-// Пак обоев: случайный дроп, вероятность зависит от редкости (сумма chance = 100%).
-// Каждый выпавший экземпляр уникален: у него свой серийный номер внутри вида.
-// Обои ставятся на все чаты сразу (wallDefault у пользователя) или на один чат (chat.walls[uid]).
-const WALL_PACK_PRICE = Number(process.env.WALL_PACK_PRICE ?? 200);
-const WALL_CATALOG = [
-    // обычные — падают чаще всего
-    { kind: 'aurora',  rarity: 'common',    name: 'Сияние',    chance: 16, bg: ['#43e97b', '#38f9d7'], pattern: '🌌' },
-    { kind: 'sunset',  rarity: 'common',    name: 'Закат',     chance: 15, bg: ['#ff9966', '#ff5e62'], pattern: '🌇' },
-    { kind: 'ocean',   rarity: 'common',    name: 'Океан',     chance: 14, bg: ['#2bc0e4', '#085078'], pattern: '🌊' },
-    { kind: 'sakura',  rarity: 'common',    name: 'Сакура',    chance: 10, bg: ['#f6d5f7', '#fbe9d7'], pattern: '🌸' },
-    // редкие
-    { kind: 'neon',    rarity: 'rare',      name: 'Неон',      chance: 12, bg: ['#f857a6', '#7a5cff'], pattern: '💠' },
-    { kind: 'matrix',  rarity: 'rare',      name: 'Матрица',   chance: 9,  bg: ['#000428', '#004e92'], pattern: '👾' },
-    { kind: 'lava',    rarity: 'rare',      name: 'Лава',      chance: 6,  bg: ['#e8505b', '#f7b733'], pattern: '🔥' },
-    // эпические
-    { kind: 'galaxy',  rarity: 'epic',      name: 'Галактика', chance: 7,  bg: ['#360033', '#0b8793'], pattern: '🌠' },
-    { kind: 'ice',     rarity: 'epic',      name: 'Лёд',       chance: 5,  bg: ['#83a4d4', '#b6fbff'], pattern: '❄️' },
-    // легендарные
-    { kind: 'gold',    rarity: 'legendary', name: 'Золото',    chance: 4,  bg: ['#bf953f', '#fcf6ba'], pattern: '✨' },
-    { kind: 'phoenix', rarity: 'legendary', name: 'Феникс',    chance: 2,  bg: ['#f12711', '#f5af19'], pattern: '🦅' },
-    // мифические — почти не падают
-    { kind: 'void',    rarity: 'mythic',    name: 'Пустота',   chance: 1,  bg: ['#000000', '#130f26'], pattern: '👁' }
-];
-const wallInfo = k => WALL_CATALOG.find(w => w.kind === k);
-const ownWalls = uid => read(F.walls).filter(w => w.ownerId === uid);
-const wallOwned = (uid, ref) => !!ref && ownWalls(uid).some(w => w.kind === ref.kind && w.serial === ref.serial);
-
-function rollWall() {
-    const total = WALL_CATALOG.reduce((s, w) => s + w.chance, 0);
-    let r = Math.random() * total;
-    for (const w of WALL_CATALOG) { r -= w.chance; if (r <= 0) return w; }
-    return WALL_CATALOG[0];
-}
-
-app.get('/api/walls', (req, res) => {
-    const u = read(F.users).find(x => x.id === req.uid);
-    res.json({
-        packPrice: WALL_PACK_PRICE,
-        catalog: WALL_CATALOG.map(w => ({ ...w, sold: read(F.walls).filter(x => x.kind === w.kind).length })),
-        mine: ownWalls(req.uid),
-        defaultWall: u ? (u.wallDefault || null) : null
-    });
-});
-
-// Открыть пак: списание Mars и случайный дроп с серийным номером
-app.post('/api/walls/open', async (req, res) => {
-    const users = read(F.users), u = users.find(x => x.id === req.uid);
-    if (!u) return res.status(401).json({ error: 'Войдите в аккаунт' });
-    const unl = isUnlimited(u);
-    if (!unl && (u.mars || 0) < WALL_PACK_PRICE)
-        return res.status(400).json({ error: `Не хватает Mars: нужно ${WALL_PACK_PRICE}, у вас ${u.mars || 0}` });
-    const item = rollWall();
-    const walls = read(F.walls);
-    const w = {
-        id: 'w_' + crypto.randomUUID(), kind: item.kind,
-        serial: walls.filter(x => x.kind === item.kind).length + 1,
-        ownerId: u.id, at: new Date().toISOString()
-    };
-    walls.push(w);
-    if (!unl) u.mars -= WALL_PACK_PRICE;
-    write(F.walls, walls);
-    write(F.users, users);
-    sendTo([u.id], { type: 'wallet', data: walletOf(u) });
-    await persist();
-    res.json({ success: true, ...walletOf(u), wall: { ...w, info: item } });
-});
-
-// Обои по умолчанию — на все чаты, где нет своих
-app.put('/api/walls/default', (req, res) => {
-    const users = read(F.users), u = users.find(x => x.id === req.uid);
-    if (!u) return res.status(401).json({ error: 'Войдите в аккаунт' });
-    const ref = req.body.wall || null;
-    if (ref && !wallOwned(u.id, ref)) return res.status(400).json({ error: 'Этих обоев нет в вашей коллекции' });
-    u.wallDefault = ref;
-    write(F.users, users);
-    res.json({ success: true, defaultWall: ref });
-});
-
-// Обои конкретного чата/канала (видит только тот, кто поставил)
-app.put('/api/chats/:chatId/wall', (req, res) => {
-    const chats = read(F.chats);
-    const chat = chats.find(c => String(c.id) === req.params.chatId);
-    if (!chat || !chat.members.includes(req.uid)) return res.status(403).json({ error: 'Нет доступа' });
-    const ref = req.body.wall || null;
-    if (ref && !wallOwned(req.uid, ref)) return res.status(400).json({ error: 'Этих обоев нет в вашей коллекции' });
-    chat.walls = chat.walls || {};
-    if (ref) chat.walls[req.uid] = ref; else delete chat.walls[req.uid];
-    write(F.chats, chats);
     res.json({ success: true });
 });
 
@@ -1012,6 +989,7 @@ wss.on('connection', ws => {
                 if (chat.type === 'channel' && chat.creator !== uid) return; // в канал пишет только автор
                 if (chat.type === 'direct') {
                     const other = chat.members.find(i => i !== uid);
+                    if (other === BOT_ID) return; // с ботом общаются кнопками
                     if (other && blockedEither(uid, other)) {
                         return ws.send(JSON.stringify({ type: 'error', data: { cid: m.cid, text: iBlocked(uid, other) ? 'Вы заблокировали этого пользователя' : 'Не удалось отправить сообщение' } }));
                     }
@@ -1115,7 +1093,7 @@ async function init() {
         });
     }
     // Чего нет в базе (первый запуск) — берём из локальных файлов, иначе пустой список
-    for (const k of ['users', 'messages', 'chats', 'gifts', 'sessions', 'blocks', 'walls']) {
+    for (const k of ['users', 'messages', 'chats', 'gifts', 'sessions', 'blocks']) {
         if (mem[k] === undefined) {
             const d = loadFile(F[k]);
             mem[k] = JSON.stringify((k === 'sessions' || k === 'blocks') && Array.isArray(d) ? {} : d); // объекты {токен: …}, {кто: [кого]}
