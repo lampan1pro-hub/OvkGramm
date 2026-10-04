@@ -127,6 +127,8 @@ input,textarea{font:inherit;color:inherit}
 .gb .gt{font-size:12px;opacity:.95}
 .gb .gn{font-weight:700}
 .m.ch{max-width:min(85%,560px)}
+.bb{display:flex;flex-direction:column;gap:5px;margin-top:8px;clear:both}.bb .br{display:flex;gap:5px}.bbtn{flex:1;padding:9px 10px;border-radius:10px;background:var(--pl);color:var(--p);font-weight:600;font-size:14px;text-align:center;white-space:normal}.bbtn:hover{background:#d3e9ff}.bbtn:active{transform:scale(.98)}
+#rdonly .btn{max-width:420px}
 #rdonly{padding:12px 12px calc(12px + env(safe-area-inset-bottom));text-align:center;color:var(--t2);background:#fff;border-top:1px solid var(--b);font-size:14px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:20px;z-index:30;font-size:14px;max-width:90%;text-align:center}
 #editbar{display:flex;align-items:center;gap:10px;padding:6px 12px;background:#fff8e1;border-top:1px solid var(--b);font-size:14px}
@@ -139,33 +141,6 @@ input,textarea{font:inherit;color:inherit}
 .gc.r-epic{box-shadow:0 0 0 2px #c58bff inset}
 .gc.r-legendary{box-shadow:0 0 0 2px #ffd54a inset,0 0 12px rgba(255,213,74,.55)}
 #hd small.ty:empty{display:none}
-
-/* Тёмная тема */
-[data-theme=dark]{--p:#5aa9ff;--pd:#3f8fe8;--pl:#1b2c42;--bg:#0f1115;--t:#e8eaed;--t2:#9aa0a6;--b:#2a2e36;--on:#31a24c}
-[data-theme=dark] body{background:var(--bg)}
-[data-theme=dark] #app,[data-theme=dark] .card,[data-theme=dark] .rh,[data-theme=dark] #form,[data-theme=dark] #pend,[data-theme=dark] #editbar,[data-theme=dark] #rdonly,[data-theme=dark] .day{background:#171a1f;color:var(--t)}
-[data-theme=dark] .m{background:#22262d;color:var(--t)}
-[data-theme=dark] .m.me{background:var(--p);color:#fff}
-[data-theme=dark] .ib,[data-theme=dark] #meBtn,[data-theme=dark] #q{background:#22262d}
-[data-theme=dark] .ib:hover,[data-theme=dark] #meBtn:hover{background:#2b3038}
-[data-theme=dark] #q:focus{background:#171a1f}
-[data-theme=dark] .it:hover{background:#1b1f25}
-[data-theme=dark] .btn.g{background:#22262d}
-[data-theme=dark] .f input,[data-theme=dark] .f textarea{background:#171a1f;border-color:var(--b)}
-/* Обои: пузыри чуть прозрачные, чтобы фон было видно */
-#msgs.haswall .m{background:rgba(255,255,255,.93)}
-#msgs.haswall .m.me{background:rgba(0,132,255,.93)}
-#botui{display:flex;flex-direction:column;gap:10px;padding:12px 12px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--b)}
-[data-theme=dark] #botui{background:#171a1f;color:var(--t)}
-#botui select{width:100%;padding:10px 12px;border:1px solid var(--b);border-radius:8px;font:inherit;background:inherit;color:inherit}
-[data-theme=dark] #msgs.haswall .m{background:rgba(23,26,31,.88)}
-[data-theme=dark] #msgs.haswall .m.me{background:rgba(58,127,216,.9)}
-/* Мифическая редкость и анимация дропа */
-.gc.r-mythic{box-shadow:0 0 0 2px #ff6bcb inset,0 0 16px rgba(255,107,203,.6)}
-@keyframes pop{0%{transform:scale(.3) rotate(-8deg);opacity:0}70%{transform:scale(1.08) rotate(2deg)}100%{transform:scale(1) rotate(0);opacity:1}}
-.pop{animation:pop .5s ease}
-@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-14deg)}75%{transform:rotate(14deg)}}
-.shake{animation:shake .35s ease infinite}
 @media(max-width:400px){.sh h1{font-size:19px}}
 @media(max-width:340px){#meBtn span{display:none}#meBtn{padding:4px}}
 @media(max-width:768px){
@@ -204,7 +179,6 @@ input,textarea{font:inherit;color:inherit}
   <aside id="side">
     <div class="sh">
       <h1>SAIMONGRAM</h1>
-      <button class="ib" id="themeBtn" title="Сменить тему">🌙</button>
       <button class="ib" id="newGroup" title="Создать группу или канал">＋</button>
       <button id="meBtn" title="Мой профиль"></button>
     </div>
@@ -229,7 +203,6 @@ input,textarea{font:inherit;color:inherit}
         <textarea id="inp" rows="1" placeholder="Сообщение" enterkeyhint="send"></textarea>
         <button id="send" aria-label="Отправить">➤</button>
       </form>
-      <div id="botui" hidden></div>
       <div id="rdonly" hidden>Писать в канал может только его автор</div>
     </section>
   </main>
@@ -254,14 +227,6 @@ const $ = s => document.querySelector(s);
 const BADGE = '<svg class="vb" role="img" aria-label="Подтверждённый аккаунт"><use href="#vb"/></svg>';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let me = null, ws = null, cur = null, query = '', found = [], opened = false;
-
-/* ---------- Тёмная/светлая тема ---------- */
-const applyTheme = t => {
-  document.documentElement.dataset.theme = t;
-  localStorage.setItem('ovk_theme', t);
-  const b = $('#themeBtn'); if (b) b.textContent = t === 'dark' ? '☀️' : '🌙';
-};
-$('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 let chats = new Map(), msgs = new Map(), typing = new Map(), pend = null;
 const msgsEl = $('#msgs');
 
@@ -381,7 +346,7 @@ $('#authForm').onsubmit = async e => {
 function boot() {
   $('#auth').hidden = true;
   $('#app').hidden = false;
-  paintMe(); setMars(me.mars || 0, me.unlimited); renderList(); connect(); loadWalls();
+  paintMe(); setMars(me.mars || 0, me.unlimited); renderList(); connect();
 }
 const paintMe = () => { $('#meBtn').innerHTML = uav(me, 'xs') + '<span>Профиль</span>'; };
 
@@ -453,7 +418,7 @@ async function loadChats() {
   try {
     chats = new Map((await api('/api/chats/' + me.id)).map(c => [c.id, c]));
     if (cur && chats.has(cur)) markRead();
-    renderList(); renderHead(); applyWall();
+    renderList(); renderHead();
   } catch {}
 }
 
@@ -513,6 +478,13 @@ async function onWs(m) {
     const c = chats.get(d.chatId);
     if (c && c.last && c.last.id === d.messageId) { c.last.text = d.text; c.last.edited = d.edited; }
     renderList();
+  } else if (m.type === 'botUpdate') {
+    const l = msgs.get(d.chatId), i = l ? l.findIndex(x => x.id === d.messageId) : -1;
+    if (i >= 0) {
+      l[i].buttons = d.buttons;
+      const c = chats.get(d.chatId), el = cur === d.chatId && bubbleEl(d.messageId);
+      if (el && c) el.outerHTML = bubbleHtml(c, l, i);
+    }
   } else if (m.type === 'messageDeleted') {
     removeMsg(d.chatId, d.messageId);
   } else if (m.type === 'error') {
@@ -611,7 +583,7 @@ async function openChat(id) {
   if (c) c.unread = 0;
   $('#app').classList.add('open');
   $('#empty').hidden = true; $('#room').hidden = false;
-  renderHead(); renderList(); applyWall();
+  renderHead(); renderList();
   if (!msgs.has(id)) {
     msgsEl.innerHTML = '<div class="day">Загрузка…</div>';
     try { msgs.set(id, await getMsgs(id)); } catch { msgs.set(id, []); }
@@ -636,14 +608,12 @@ function renderHead() {
   const c = chats.get(cur);
   if (!c) return;
   const t = typing.has(cur), on = c.peer && c.peer.online;
-  const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : c.type === 'channel' ? subs(c.subscribers) : (c.peer && c.peer.bot ? '🤖 бот' : (on ? 'в сети' : 'не в сети'));
+  const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : c.type === 'channel' ? subs(c.subscribers) : (c.peer && c.peer.bot ? 'бот' : on ? 'в сети' : 'не в сети');
+  const isBot = c.type === 'direct' && c.peer && c.peer.bot;
   const iBlock = c.type === 'direct' && c.peer && blocked.has(c.peer.id);
-  const isBotChat = c.type === 'direct' && c.peer && c.peer.bot;
-  const canWrite = !iBlock && !isBotChat && (c.type !== 'channel' || c.creator === me.id); // в канал пишет только автор
-  $('#form').hidden = !canWrite; $('#rdonly').hidden = canWrite || isBotChat;
-  $('#botui').hidden = !isBotChat;
-  if (isBotChat) drawBotui();
-  if (!canWrite) setHtml($('#rdonly'), iBlock ? 'Вы заблокировали этого пользователя · <button class="lnk" id="unb">Разблокировать</button>' : 'Писать в канал может только его автор');
+  const canWrite = !iBlock && !isBot && (c.type !== 'channel' || c.creator === me.id); // в канал пишет только автор
+  $('#form').hidden = !canWrite; $('#rdonly').hidden = canWrite;
+  if (!canWrite) setHtml($('#rdonly'), isBot ? '<button type="button" class="btn" id="botstart">▶️ Старт</button>' : iBlock ? 'Вы заблокировали этого пользователя · <button class="lnk" id="unb">Разблокировать</button>' : 'Писать в канал может только его автор');
   setHtml($('#hd'), cav(c, 's') +
     `<div class="im">${titleH(c)}<small class="${t || on ? 'ty' : ''}">${sub}</small></div>`);
 }
@@ -667,6 +637,7 @@ const mediaHtml = md => {
     ? `<video src="${esc(md.url)}" controls playsinline preload="metadata" style="${ar}"></video>`
     : `<img class="ph" src="${esc(md.url)}" alt="Фото" loading="lazy" decoding="async" style="${ar}">`;
 };
+const btnsHtml = m => m.buttons && m.buttons.length ? '<div class="bb">' + m.buttons.map((row, r) => '<div class="br">' + row.map((b, k) => `<button type="button" class="bbtn" data-r="${r}" data-k="${k}">${esc(b.t)}</button>`).join('') + '</div>').join('') + '</div>' : '';
 function bubbleHtml(c, l, i) {
   const m = l[i], prev = l[i - 1], mine = m.senderId === me.id, ch = c.type === 'channel';
   let who = '';
@@ -676,7 +647,7 @@ function bubbleHtml(c, l, i) {
   }
   const st = m.pending ? '<span class="tk">🕓</span>' : mine && !ch ? tick(c, m.timestamp) : '';
   const act = mine && !m.pending ? `<button class="mb" data-m="${esc(m.id)}" aria-label="Действия с сообщением">⋯</button>` : '';
-  return `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''} ${m.pending ? 'pending' : ''}" data-id="${esc(m.id)}"${m.cid ? ` data-cid="${esc(m.cid)}"` : ''}>${who}${m.gift ? giftBubble(m.gift, mine) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text ? `<span class="tx">${esc(m.text)}</span>` : ''}<time>${act}${m.edited ? 'изм. ' : ''}${hm(m.timestamp)}${st}</time></div>`;
+  return `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''} ${m.pending ? 'pending' : ''}" data-id="${esc(m.id)}"${m.cid ? ` data-cid="${esc(m.cid)}"` : ''}>${who}${m.gift ? giftBubble(m.gift, mine) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text ? `<span class="tx">${esc(m.text)}</span>` : ''}${btnsHtml(m)}<time>${act}${m.edited ? 'изм. ' : ''}${hm(m.timestamp)}${st}</time></div>`;
 }
 const dayHtml = (l, i) => !l[i - 1] || new Date(l[i - 1].timestamp).toDateString() !== new Date(l[i].timestamp).toDateString()
   ? `<div class="day">${dl(l[i].timestamp)}</div>` : '';
@@ -701,7 +672,15 @@ function rerender() {
   renderMsgs();
   if (!was) msgsEl.scrollTop = top;
 }
-msgsEl.onclick = e => {
+msgsEl.onclick = async e => {
+  const bb = e.target.closest('.bbtn');
+  if (bb) {
+    const row = bb.closest('.m');
+    bb.disabled = true;
+    try { await api('/api/bot/click', 'POST', {messageId: row.dataset.id, row: bb.dataset.r, col: bb.dataset.k}); }
+    catch (x) { toast(x.message); bb.disabled = false; }
+    return;
+  }
   const b = e.target.closest('.mb');
   if (b) return msgMenu(b.dataset.m);
   const i = e.target.closest('img.ph');
@@ -823,7 +802,6 @@ ${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}
 <div style="font-weight:600;margin:4px 0">👽 <span class="mars-n">${marsTxt()}</span> Mars</div></div>
 <div class="sec" style="padding:8px 0 6px">Мои подарки</div><div class="gg" id="pgifts"></div>
 <div class="row"><button type="button" class="btn g" id="pshop">🎁 Магазин подарков</button></div>
-<div class="row"><button type="button" class="btn g" id="pwalls">🖼 Мои обои</button></div>
 <div class="row"><button type="button" class="btn g" id="pbl">🚫 Заблокированные</button></div>
 <form id="pf" style="margin-top:12px">
 <div class="f"><label>Имя</label><input id="pn" value="${esc(me.username)}" maxlength="40"></div>
@@ -855,7 +833,6 @@ ${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}
   };
   $('#lo').onclick = () => logout();
   $('#pshop').onclick = () => shop();
-  $('#pwalls').onclick = () => wallsUI('profile');
   $('#pbl').onclick = blockedList;
   loadGifts(me.id, $('#pgifts'), true);
 }
@@ -1058,183 +1035,6 @@ ${c.description ? `<p style="margin-top:12px">${esc(c.description)}</p>` : ''}</
   $('#grm').onclick = () => patch({avatar: ''}).catch(x => { $('#ge').textContent = x.message; });
 }
 
-
-
-/* ---------- Бот накрутки NAKRYTKA_BOT ---------- */
-function drawBotui() {
-  const el = $('#botui');
-  el.innerHTML = `<button class="btn" id="bstart">▶️ Старт</button>`;
-  $('#bstart').onclick = boostPanel;
-}
-function boostPanel() {
-  const mine = [...chats.values()].filter(c => c.type === 'channel' && c.creator === me.id);
-  if (!mine.length) {
-    $('#botui').innerHTML = `<div style="text-align:center;color:var(--t2)">У вас пока нет каналов.<br>Создайте канал через кнопку «＋».</div>
-<div class="row" style="margin-top:0"><button class="btn g" id="bbk">◀️ Назад</button></div>`;
-    $('#bbk').onclick = drawBotui;
-    return;
-  }
-  $('#botui').innerHTML = `
-<div class="f" style="margin:0"><label>Канал</label><select id="bch">${mine.map(c => `<option value="${esc(c.id)}">${esc(c.name)} · ${c.subscribers} подп.</option>`).join('')}</select></div>
-<div class="f" style="margin:0"><label>Подписчиков (за раз до 500)</label><input id="bn" type="number" min="1" max="500" value="10" inputmode="numeric"></div>
-<div class="row" style="margin-top:0">${[10, 50, 100, 500].map(n => `<button type="button" class="btn g" data-n="${n}">${n}</button>`).join('')}</div>
-<div id="bsum" style="font-weight:600"></div>
-<div class="err" id="be"></div>
-<div class="row" style="margin-top:0"><button class="btn" id="bpay">💸 Оплатить</button><button class="btn g" id="bbk">Назад</button></div>`;
-  const sum = () => {
-    const n = Math.max(0, Math.min(500, Math.floor(Number($('#bn').value) || 0)));
-    $('#bsum').textContent = `👽 ${n * boostPrice} Mars · у вас 👽 ${marsTxt()} · 1 подписчик = ${boostPrice} Mars`;
-  };
-  $('#bn').oninput = sum;
-  $('#botui').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { $('#bn').value = b.dataset.n; sum(); });
-  $('#bbk').onclick = drawBotui;
-  $('#bpay').onclick = async () => {
-    const b = $('#bpay'); b.disabled = true;
-    try {
-      const r = await api('/api/boost', 'POST', { channelId: $('#bch').value, count: Math.floor(Number($('#bn').value) || 0) });
-      setMars(r.mars, r.unlimited);
-      toast(`✅ +${r.added} подписчиков начислено`);
-      drawBotui();
-      loadChats(); // обновится число подписчиков у всех
-    } catch (x) { const e = $('#be'); if (e) e.textContent = x.message; b.disabled = false; }
-  };
-  sum();
-}
-
-/* ---------- NFT-обои: коллекция, паки, фон чатов ---------- */
-let wallsCat = new Map(), myWalls = [], wallDefault = null, wallPackPrice = 200, boostPrice = 3;
-const wallCat = k => wallsCat.get(k) || { kind: k, name: 'Обои', rarity: 'common', chance: 0, bg: ['#c9ced6', '#9aa3b0'], pattern: '' };
-const WALL_RN = { common: 'Обычные', rare: 'Редкие', epic: 'Эпические', legendary: 'Легендарные', mythic: 'Мифические' };
-async function loadWalls() {
-  try {
-    const d = await api('/api/walls');
-    wallsCat = new Map(d.catalog.map(w => [w.kind, w]));
-    myWalls = d.mine || [];
-    wallDefault = d.defaultWall || null;
-    wallPackPrice = d.packPrice;
-    applyWall();
-  } catch {}
-}
-const wallKey = w => w.kind + ':' + w.serial;
-const wallCss = info => {
-  const grad = `linear-gradient(150deg,${info.bg[0]},${info.bg[1]})`;
-  if (!info.pattern) return grad;
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><text x='24' y='100' font-size='52' opacity='.16'>${info.pattern}</text></svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}"), ${grad}`;
-};
-// Свои обои чата важнее обоев «на все чаты»
-function applyWall() {
-  const c = chats.get(cur);
-  const ref = (c && c.wall) || wallDefault || null;
-  const info = ref && wallCat(ref.kind);
-  if (info) { msgsEl.style.backgroundImage = wallCss(info); msgsEl.classList.add('haswall'); }
-  else { msgsEl.style.backgroundImage = ''; msgsEl.classList.remove('haswall'); }
-}
-const wallTile = w => {
-  const k = wallCat(w.kind);
-  return `<div class="gc r-${k.rarity}" data-w="${esc(w.id)}" style="background:linear-gradient(150deg,${k.bg[0]},${k.bg[1]})"><div class="gi">${k.pattern || '🖼'}</div><div class="gn">${esc(k.name)}</div><div class="gs">№${w.serial} · ${WALL_RN[k.rarity]}</div></div>`;
-};
-
-// mode: 'profile' — коллекция из профиля, 'chat' — выбор обоев для открытого чата
-async function wallsUI(mode) {
-  let d;
-  try { d = await api('/api/walls'); }
-  catch (x) { modal(`<div class="err">${esc(x.message)}</div><div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`); return; }
-  wallsCat = new Map(d.catalog.map(w => [w.kind, w]));
-  myWalls = d.mine || [];
-  wallDefault = d.defaultWall || null;
-  wallPackPrice = d.packPrice;
-
-  const c = chats.get(cur);
-  const chatWall = mode === 'chat' && c ? (c.wall || null) : null;
-  const defKey = wallDefault ? wallDefault.kind + ':' + wallDefault.serial : '';
-  modal(`<h2>🖼 Мои обои</h2>
-<div style="margin:6px 0;font-weight:600">👽 <span class="mars-n">${marsTxt()}</span> Mars · пак обоев: 👽 ${wallPackPrice}</div>
-<div style="color:var(--t2);font-size:13px;margin-bottom:8px">Каждый пак — случайный дроп. Чем реже обои, тем меньше шанс выпадения. Экземпляр уникален: у него есть номер.</div>
-<div class="row" style="margin-top:0"><button class="btn" id="wp-open">🎲 Открыть пак за 👽 ${wallPackPrice}</button></div>
-<details style="margin:10px 0"><summary style="cursor:pointer;color:var(--t2);font-size:13px">📊 Шансы выпадения</summary>
-<div style="margin-top:6px">${[...wallsCat.values()].map(w => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>${w.pattern || '🖼'} ${esc(w.name)}</span><span style="color:var(--t2)">${WALL_RN[w.rarity]} · ${w.chance}%</span></div>`).join('')}</div></details>
-${mode === 'chat' ? `<div class="sec" style="padding-left:0">Чат «${esc(title(c))}»</div>
-<div class="row" style="margin-top:0">${chatWall ? '<button class="btn r" id="wp-clear">🚫 Убрать обои из чата</button>' : ''}<span style="flex:1;color:var(--t2);font-size:13px;align-self:center">${chatWall ? 'В этом чате свои обои' : (defKey ? 'Фон как у всех чатов (по умолчанию)' : 'Стандартный фон')}</span></div>` : ''}
-<div class="sec" style="padding-left:0">Коллекция: ${myWalls.length}</div>
-<div class="gg" id="wpg">${myWalls.length ? myWalls.map(wallTile).join('') : '<div style="color:var(--t2);font-size:14px;grid-column:1/-1">Пока пусто — откройте первый пак 🎲</div>'}</div>
-<div class="row"><button type="button" class="btn g" id="wp-bk">${mode === 'chat' ? 'Назад' : 'Закрыть'}</button></div>`);
-
-  $('#wp-bk').onclick = () => mode === 'chat' ? chatMenu(cur) : myProfile();
-  $('#wp-open').onclick = () => openWallPack(mode);
-  const clr = $('#wp-clear');
-  if (clr) clr.onclick = async () => {
-    try {
-      await api(`/api/chats/${encodeURIComponent(cur)}/wall`, 'PUT', { wall: null });
-      const cc = chats.get(cur); if (cc) cc.wall = null;
-      applyWall(); toast('Обои убраны'); wallsUI(mode);
-    } catch (x) { toast(x.message); }
-  };
-  $('#wpg').onclick = e => {
-    const el = e.target.closest('[data-w]');
-    if (el) wallPick(myWalls.find(w => w.id === el.dataset.w), mode);
-  };
-}
-
-function wallPick(w, mode) {
-  if (!w) return;
-  const k = wallCat(w.kind);
-  const ref = { kind: w.kind, serial: w.serial };
-  const c = chats.get(cur);
-  const isChatWall = mode === 'chat' && c && c.wall && c.wall.kind === w.kind && c.wall.serial === w.serial;
-  const isDef = wallDefault && wallDefault.kind === w.kind && wallDefault.serial === w.serial;
-  modal(`<div class="gc big pop r-${k.rarity}" style="background:linear-gradient(150deg,${k.bg[0]},${k.bg[1]})"><div class="gi">${k.pattern || '🖼'}</div><div class="gn">${esc(k.name)}</div></div>
-<div style="text-align:center;margin-top:12px;font-weight:600">${WALL_RN[k.rarity]} · шанс выпадения ${k.chance}%</div>
-<div style="text-align:center;color:var(--t2);font-size:13px">Экземпляр №${w.serial} · выпал ${new Date(w.at).toLocaleDateString('ru-RU')}</div>
-<div class="err" id="ge"></div>
-${mode === 'chat' && !isChatWall ? '<div class="row" style="margin-top:0"><button class="btn" id="w-set">🖼 В этот чат</button></div>' : ''}
-${!isDef ? '<div class="row" style="margin-top:0"><button class="btn g" id="w-def">✨ На все чаты (по умолчанию)</button></div>' : ''}
-${isDef ? '<div class="row" style="margin-top:0"><button class="btn r" id="w-def0">🚫 Убрать обои по умолчанию</button></div>' : ''}
-<div class="row"><button type="button" class="btn g" id="w-bk">Назад</button></div>`);
-  $('#w-bk').onclick = () => wallsUI(mode);
-  const set = $('#w-set');
-  if (set) set.onclick = async () => {
-    try {
-      await api(`/api/chats/${encodeURIComponent(cur)}/wall`, 'PUT', { wall: ref });
-      const cc = chats.get(cur); if (cc) cc.wall = ref;
-      applyWall(); toast('Обои установлены в чат'); wallsUI(mode);
-    } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
-  };
-  const def = $('#w-def');
-  if (def) def.onclick = async () => {
-    try {
-      await api('/api/walls/default', 'PUT', { wall: ref });
-      wallDefault = ref; applyWall(); toast('Обои по умолчанию обновлены'); wallsUI(mode);
-    } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
-  };
-  const def0 = $('#w-def0');
-  if (def0) def0.onclick = async () => {
-    try {
-      await api('/api/walls/default', 'PUT', { wall: null });
-      wallDefault = null; applyWall(); toast('Обои по умолчанию убраны'); wallsUI(mode);
-    } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
-  };
-}
-
-// Открытие пака: сначала трясём кубик, потом показываем дроп и его шанс
-async function openWallPack(mode) {
-  modal(`<div style="text-align:center;padding:24px"><div class="shake" style="font-size:64px">🎲</div><div style="margin-top:12px;color:var(--t2)">Открываем пак…</div></div>`);
-  let r;
-  try { r = await api('/api/walls/open', 'POST', {}); }
-  catch (x) { modal(`<div class="err">${esc(x.message)}</div><div class="row"><button type="button" class="btn g" id="pk-bk">Назад</button></div>`); $('#pk-bk').onclick = () => wallsUI(mode); return; }
-  setMars(r.mars, r.unlimited);
-  myWalls.push(r.wall);
-  setTimeout(() => {
-    const k = r.wall.info;
-    modal(`<div class="gc big pop r-${k.rarity}" style="background:linear-gradient(150deg,${k.bg[0]},${k.bg[1]})"><div class="gi">${k.pattern || '🖼'}</div><div class="gn">${esc(k.name)}</div></div>
-<div style="text-align:center;margin-top:12px;font-weight:600">${WALL_RN[k.rarity]} · шанс выпадения был ${k.chance}%</div>
-<div style="text-align:center;color:var(--t2);font-size:13px">Экземпляр №${r.wall.serial} — теперь в вашей коллекции</div>
-<div class="row"><button class="btn" id="pk-use">Использовать</button><button class="btn g" id="pk-ok">Отлично</button></div>`);
-    $('#pk-use').onclick = () => wallPick(r.wall, mode);
-    $('#pk-ok').onclick = () => wallsUI(mode);
-  }, 1100);
-}
-
 /* ---------- Mars и подарки ---------- */
 let catalog = new Map(); // kind -> {emoji, name, price, supply, sold, bg}
 const kindInfo = k => catalog.get(k) || {emoji: '🎁', name: 'Подарок', rarity: 'common', price: 0, supply: 0, sold: 0, bg: ['#c9ced6', '#9aa3b0']};
@@ -1261,7 +1061,6 @@ async function loadCatalog() {
     const d = await api('/api/shop');
     catalog = new Map(d.catalog.map(c => [c.kind, c]));
     setMars(d.mars, d.unlimited);
-    boostPrice = d.boostPrice || 3;
     if (cur && msgs.has(cur)) rerender(); // подарки в чате теперь рисуются с картинкой
   } catch {}
 }
@@ -1464,7 +1263,13 @@ async function toggleBlock(u, reopen) {
     if (reopen) userProfile(u); else closeModal();
   } catch (x) { toast(x.message); }
 }
-$('#rdonly').onclick = e => {
+$('#rdonly').onclick = async e => {
+  if (e.target.id === 'botstart') {
+    e.target.disabled = true;
+    try { await api('/api/bot/start', 'POST', {}); } catch (x) { toast(x.message); }
+    e.target.disabled = false;
+    return;
+  }
   if (e.target.id !== 'unb') return;
   const c = chats.get(cur);
   if (c && c.peer) toggleBlock(c.peer, false);
@@ -1498,7 +1303,6 @@ function chatMenu(id) {
   } else {
     items = [['info', 'ℹ️ О канале', 'g'], c.creator === me.id ? ['delall', '🗑 Удалить канал', 'r'] : ['leave', '🚪 Отписаться', 'r']];
   }
-  items.splice(1, 0, ['wall', '🖼 Обои чата', 'g']);
   modal(`<h2 style="margin-bottom:6px">${esc(title(c))}</h2>${items.map(([k, t, cls]) =>
     `<div class="row"><button class="btn ${cls}" data-a="${k}">${t}</button></div>`).join('')}
 <div class="row"><button type="button" class="btn g" data-x>Отмена</button></div>`);
@@ -1506,7 +1310,6 @@ function chatMenu(id) {
 }
 function chatAction(c, a) {
   if (a === 'prof') return userProfile(c.peer);
-  if (a === 'wall') return wallsUI('chat');
   if (a === 'info') return c.type === 'group' ? groupInfo(c.id) : channelInfo(c.id);
   if (a === 'blk' || a === 'unb') return toggleBlock(c.peer, false);
   if (a === 'del') { // личный чат: у меня или у обоих
@@ -1551,7 +1354,6 @@ if (window.visualViewport) {
 
 /* ---------- Запуск ---------- */
 (async () => {
-  applyTheme(localStorage.getItem('ovk_theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   authUI();
   try { me = JSON.parse(localStorage.getItem('ovk_user')); } catch { me = null; }
   if (me && await checkSession()) boot();
