@@ -29,8 +29,8 @@ input,textarea{font:inherit;color:inherit}
 .err{color:#d33;font-size:13px;min-height:18px;margin:4px 0}
 .lnk{color:var(--p);font-weight:600;padding:6px 10px}
 /* вход */
-#auth{height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;background:linear-gradient(135deg,#0084ff,#0066cc)}
-.card{background:#fff;border-radius:16px;padding:28px;width:100%;max-width:400px;max-height:92dvh;overflow:auto}
+#auth{height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;background:linear-gradient(135deg,#0084ff,#0066cc);padding-bottom:80px}
+.card{background:#fff;border-radius:24px;padding:28px 28px 40px;width:100%;max-width:400px;max-height:calc(100dvh - 80px);overflow-y:auto;overflow-x:hidden}
 .logo{font-size:30px;font-weight:800;color:var(--p);text-align:center}
 .tag{text-align:center;color:var(--t2);font-size:14px;margin-bottom:20px}
 .tg{text-align:center;margin-top:14px;font-size:14px;color:var(--t2)}
@@ -99,7 +99,10 @@ input,textarea{font:inherit;color:inherit}
 #pend{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff;border-top:1px solid var(--b)}
 #pend .th{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#000;flex-shrink:0}
 #pend .st{flex:1;font-size:14px;color:var(--t2)}
-#form{display:flex;gap:8px;align-items:flex-end;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--b)}
+#form{display:flex;gap:6px;align-items:flex-end;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--b)}
+#attach,#attachMulti{transition:transform .15s,background .15s}
+#attach:hover,#attachMulti:hover{transform:scale(1.1)}
+#attach:active,#attachMulti:active{transform:scale(.95)}
 #pend:not([hidden])+#form{border-top:0}
 #inp{flex:1;resize:none;max-height:120px;padding:9px 14px;border:1px solid var(--b);border-radius:24px;font-size:16px;line-height:1.3;display:block;transition:border-color .15s,background .15s}
 #inp:focus{border-color:var(--p);background:var(--pl)}
@@ -247,8 +250,8 @@ body{font-family:Roboto,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-s
     <div class="f"><label id="el">Email</label><input id="ae" autocapitalize="off" autocomplete="username"></div>
     <div class="f"><label>Пароль</label><input id="ap" type="password" autocomplete="current-password" placeholder="Минимум 6 символов"></div>
     <div class="err" id="aerr"></div>
-    <button class="btn" id="authBtn"></button>
-    <p class="tg"><span id="tglT"></span> <button type="button" id="tgl"></button></p>
+    <button class="btn" id="authBtn">Создать аккаунт</button>
+    <p class="tg"><span id="tglT">Уже есть аккаунт?</span> <button type="button" id="tgl">Войти</button></p>
   </form>
 </div>
 
@@ -276,7 +279,8 @@ body{font-family:Roboto,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-s
       <div id="editbar" hidden><span>✏️ Редактирование сообщения</span><button type="button" class="ib" id="ecancel" aria-label="Отменить">✕</button></div>
       <div id="pend" hidden></div>
       <form id="form">
-        <button type="button" class="ib" id="attach" aria-label="Прикрепить фото или видео">📎</button>
+        <button type="button" class="ib" id="attach" aria-label="Прикрепить одно фото или видео" title="Одно фото/видео">📎</button>
+        <button type="button" class="ib" id="attachMulti" aria-label="Прикрепить несколько фото и видео" title="Несколько файлов">📁</button>
         <textarea id="inp" rows="1" placeholder="Сообщение" enterkeyhint="send"></textarea>
         <button id="send" aria-label="Отправить">➤</button>
       </form>
@@ -334,8 +338,18 @@ const title = c => c.type !== 'direct' ? c.name : (c.peer ? c.peer.username : '�
 const fileEl = $('#file');
 const pickFile = accept => new Promise(res => {
   fileEl.accept = accept; fileEl.value = '';
+  fileEl.multiple = false;
   fileEl.onchange = () => res(fileEl.files[0] || null);
   fileEl.oncancel = () => res(null);
+  fileEl.click();
+});
+
+// Выбор нескольких файлов/фото
+const pickFiles = accept => new Promise(res => {
+  fileEl.accept = accept; fileEl.value = '';
+  fileEl.multiple = true;
+  fileEl.onchange = () => res(Array.from(fileEl.files) || []);
+  fileEl.oncancel = () => res([]);
   fileEl.click();
 });
 
@@ -816,6 +830,7 @@ function pendStatus() {
   const s = $('#pend .st');
   if (s && pend) s.textContent = pend.busy ? `Загрузка ${pend.pct}%` : 'Готово. Добавьте подпись или отправьте';
 }
+// Отправка одного файла (как было)
 $('#attach').onclick = async () => {
   if (editing) return;
   const f = await pickFile('image/*,video/*');
@@ -838,6 +853,43 @@ $('#attach').onclick = async () => {
     if (pend === p) { pend = null; drawPend(); }
     alert(x.message);
   }
+};
+
+// Отправка нескольких файлов (новое!)
+async function sendMultipleFiles() {
+  if (editing || !cur) return;
+  const files = await pickFiles('image/*,video/*');
+  if (!files || files.length === 0) return;
+  
+  for (const f of files) {
+    const isV = f.type.startsWith('video/');
+    if (!isV && !f.type.startsWith('image/')) {
+      alert(`${f.name}: Выберите фото или видео`);
+      continue;
+    }
+    if (isV && f.size > 50 * 1024 * 1024) {
+      alert(`${f.name}: Видео больше 50 МБ`);
+      continue;
+    }
+
+    try {
+      let blob = f, dims;
+      if (isV) dims = await videoDims(URL.createObjectURL(f));
+      else { const r = await prepImage(f, 1600, .85); blob = r.blob; dims = r; }
+      const up = await upload(blob, 'media');
+      // Отправляем сразу после загрузки
+      const media = {kind: isV ? 'video' : 'image', url: up.url, w: dims.w, h: dims.h};
+      sendNow('', media);
+    } catch (x) {
+      alert(`${f.name}: ${x.message}`);
+    }
+  }
+  toast('📁 Все файлы отправлены!');
+}
+
+// Обработчик кнопки для нескольких файлов
+$('#attachMulti').onclick = async () => {
+  await sendMultipleFiles();
 };
 
 $('#form').onsubmit = e => {
@@ -1189,7 +1241,7 @@ const randomBg = () => {
     {from: '#FFFFD2', to: '#FFFFE6'}, // Кремовый
     {from: '#A8D8EA', to: '#D0E8F2'}, // Небесный
     {from: '#A8E6CF', to: '#C4F5E3'}  // Зелёный
-  };
+  ];
   return colors[Math.floor(Math.random() * colors.length)];
 };
 
@@ -1543,4 +1595,4 @@ if (window.visualViewport) {
 })();
 </script>
 </body>
-</html>
+  </html>
