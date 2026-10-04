@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>OVKGRAMM</title>
+<title>SAIMONGRAM</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--p:#0084ff;--pd:#0066cc;--pl:#e7f3ff;--bg:#f0f2f5;--t:#111;--t2:#65676b;--b:#e5e5ea;--on:#31a24c}
@@ -17,8 +17,9 @@ input,textarea{font:inherit;color:inherit}
 .f label{display:block;font-size:13px;color:var(--t2);margin-bottom:4px}
 .f input,.f textarea{width:100%;padding:10px 12px;border:1px solid var(--b);border-radius:8px;font-size:16px}
 .f input:focus,.f textarea:focus{outline:0;border-color:var(--p);background:var(--pl)}
-.btn{width:100%;padding:11px;border-radius:8px;font-weight:600;background:var(--p);color:#fff}
-.btn:hover:not(:disabled){background:var(--pd)}
+.btn{width:100%;padding:11px;border-radius:8px;font-weight:600;background:var(--p);color:#fff;transition:all .2s ease;transform-origin:center}
+.btn:hover:not(:disabled){background:var(--pd);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,132,255,.2)}
+.btn:active:not(:disabled){transform:translateY(0)}
 .btn.g{background:var(--bg);color:var(--p)}
 .btn.r{background:#fdecea;color:#d33}
 .row{display:flex;gap:8px;margin-top:12px}
@@ -45,8 +46,9 @@ input,textarea{font:inherit;color:inherit}
 #q{margin:0 14px 8px;padding:10px 16px;border:1px solid transparent;background:var(--bg);border-radius:22px;font-size:16px}
 #q:focus{outline:0;background:#fff;border-color:var(--p)}
 #list{flex:1;overflow-y:auto}
-.it{display:flex;gap:12px;padding:10px 14px;cursor:pointer;align-items:center}
-.it:hover{background:var(--bg)}
+.it{display:flex;gap:12px;padding:10px 14px;cursor:pointer;align-items:center;transition:background .15s ease;animation:slideIn .3s ease-out}
+.it:hover{background:var(--bg);transform:translateX(2px)}
+@keyframes slideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
 .it.on{background:var(--pl)}
 .sec{padding:10px 14px 4px;font-size:13px;color:var(--t2);font-weight:600}
 .av{position:relative;width:48px;height:48px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;color:#fff;font-weight:600;font-size:18px}
@@ -78,7 +80,8 @@ input,textarea{font:inherit;color:inherit}
 #hd small.ty{color:var(--p)}
 #msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:3px;overscroll-behavior:contain}
 .day{align-self:center;font-size:12px;color:var(--t2);background:#fff;padding:2px 10px;border-radius:10px;margin:8px 0}
-.m{max-width:min(70%,520px);padding:7px 11px;border-radius:18px 18px 18px 4px;background:#fff;overflow-wrap:anywhere;white-space:pre-wrap;align-self:flex-start}
+.m{max-width:min(70%,520px);padding:7px 11px;border-radius:18px 18px 18px 4px;background:#fff;overflow-wrap:anywhere;white-space:pre-wrap;align-self:flex-start;animation:msgIn .3s ease-out;transition:all .2s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .m.me{align-self:flex-end;background:var(--p);color:#fff;border-radius:18px 18px 4px 18px}
 .m b{display:block;font-size:12px;color:var(--p)}
 .m time{font-size:11px;color:var(--t2);margin-left:8px;float:right;margin-top:6px}
@@ -100,10 +103,29 @@ input,textarea{font:inherit;color:inherit}
 #inp:focus{outline:0;border-color:var(--p)}
 #send{width:40px;height:40px;border-radius:50%;background:var(--p);color:#fff;font-size:16px;flex-shrink:0}
 /* окна */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9;animation:fadeIn .2s ease;backdrop-filter:blur(2px)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal .card{animation:slideUp .3s cubic-bezier(.34,.69,.76,1)}
 .modal h2{font-size:20px}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:20;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
 #lb img{max-width:100%;max-height:100%;object-fit:contain}
+#wallet{display:flex;justify-content:space-between;align-items:center;width:calc(100% - 28px);margin:0 14px 8px;padding:9px 14px;border-radius:12px;background:linear-gradient(90deg,#fff1e6,#ffe0f0);font-weight:600;font-size:14px}
+.gg{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.gc{border-radius:14px;padding:10px 6px 8px;text-align:center;color:#fff;cursor:pointer;text-shadow:0 1px 2px rgba(0,0,0,.25);user-select:none}
+.gc.off{opacity:.45;cursor:default}
+.gc .gi{font-size:34px;line-height:1.15}
+.gc .gn{font-size:12px;font-weight:600;margin-top:2px}
+.gc .gs{font-size:11px;opacity:.92}
+.gc.big{padding:22px 10px;max-width:200px;margin:0 auto;cursor:default}
+.gc.big .gi{font-size:72px}
+.gc.big .gn{font-size:16px}
+.gb{border-radius:16px;padding:14px 20px;min-width:190px;text-align:center;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);white-space:normal}
+.gb .gi{font-size:56px;line-height:1.2}
+.gb .gt{font-size:12px;opacity:.95}
+.gb .gn{font-weight:700}
+.m.ch{max-width:min(85%,560px)}
+#rdonly{padding:12px 12px calc(12px + env(safe-area-inset-bottom));text-align:center;color:var(--t2);background:#fff;border-top:1px solid var(--b);font-size:14px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:20px;z-index:30;font-size:14px;max-width:90%;text-align:center}
 @media(max-width:400px){.sh h1{font-size:19px}}
 @media(max-width:340px){#meBtn span{display:none}#meBtn{padding:4px}}
 @media(max-width:768px){
@@ -126,7 +148,7 @@ input,textarea{font:inherit;color:inherit}
 
 <div id="auth">
   <form class="card" id="authForm">
-    <div class="logo">OVKGRAMM</div>
+    <div class="logo">SAIMONGRAM</div>
     <p class="tag">Реальное общение с друзьями</p>
     <div class="f" id="fN"><label>Имя</label><input id="an" maxlength="40" autocomplete="name"></div>
     <div class="f" id="fH"><label>Юзернейм</label><input id="ah" maxlength="21" autocapitalize="off" autocomplete="off" placeholder="латиница, цифры и _"></div>
@@ -141,12 +163,13 @@ input,textarea{font:inherit;color:inherit}
 <div id="app" hidden>
   <aside id="side">
     <div class="sh">
-      <h1>OVKGRAMM</h1>
-      <button class="ib" id="newGroup" title="Новая группа">👥</button>
+      <h1>SAIMONGRAM</h1>
+      <button class="ib" id="newGroup" title="Создать группу или канал">＋</button>
       <button id="meBtn" title="Мой профиль"></button>
     </div>
     <div id="conn" hidden>Нет соединения, переподключаюсь…</div>
-    <input id="q" placeholder="Поиск по имени или @юзернейму" autocomplete="off" autocapitalize="off">
+    <button id="wallet" type="button"><span>🎁 Подарки</span><span>👽 <b class="mars-n">0</b> Mars</span></button>
+    <input id="q" placeholder="Поиск людей и каналов" autocomplete="off" autocapitalize="off">
     <div id="list"></div>
   </aside>
   <main id="chat">
@@ -163,11 +186,13 @@ input,textarea{font:inherit;color:inherit}
         <textarea id="inp" rows="1" placeholder="Сообщение" enterkeyhint="send"></textarea>
         <button id="send" aria-label="Отправить">➤</button>
       </form>
+      <div id="rdonly" hidden>Писать в канал может только его автор</div>
     </section>
   </main>
 </div>
 
 <div class="modal" id="modal" hidden><div class="card" id="card"></div></div>
+<div id="toast" hidden></div>
 <div id="lb" hidden><img id="lbi" alt=""></div>
 <input type="file" id="file" hidden>
 
@@ -190,8 +215,9 @@ const msgsEl = $('#msgs');
 
 const nmH = (name, v, extra = '') => `<span class="nm"><span class="nt">${esc(name)}${extra}</span>${v ? BADGE : ''}</span>`;
 const api = async (url, method = 'GET', body) => {
-  const r = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: body && JSON.stringify(body) });
+  const r = await fetch(url, { method, headers: {'Content-Type': 'application/json', ...(me && me.token ? {Authorization: 'Bearer ' + me.token} : {})}, body: body && JSON.stringify(body) });
   const d = await r.json().catch(() => ({}));
+  if (r.status === 401 && me && !/\/(login|register)$/.test(url)) logout(d.error || 'Сессия устарела, войдите снова.');
   if (!r.ok) throw new Error(d.error || 'Ошибка сервера');
   return d;
 };
@@ -200,14 +226,63 @@ const hm = t => new Date(t).toLocaleTimeString('ru-RU', {hour: '2-digit', minute
 const lt = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? hm(t) : d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit'}); };
 const dl = t => new Date(t).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'});
 
+// Функции для управления сообщениями и чатами
+const deleteMessage = async (messageId, chatId) => {
+  if (!confirm('Удалить сообщение?')) return;
+  try {
+    await api(`/api/messages/${messageId}`, 'DELETE');
+    const msgs = await getMsgs(chatId);
+    renderChat(cur, msgs);
+    toast('✅ Сообщение удалено');
+  } catch (e) { alert(e.message); }
+};
+
+const editMessage = async (messageId, currentText, chatId) => {
+  const newText = prompt('Изменить сообщение:', currentText);
+  if (newText === null || newText.trim() === '') return;
+  try {
+    await api(`/api/messages/${messageId}`, 'PUT', {text: newText});
+    const msgs = await getMsgs(chatId);
+    renderChat(cur, msgs);
+    toast('✅ Сообщение изменено');
+  } catch (e) { alert(e.message); }
+};
+
+const deleteChat = async (chatId) => {
+  if (!confirm('Удалить этот чат?')) return;
+  try {
+    await api(`/api/chats/${chatId}`, 'DELETE');
+    cur = null;
+    open(null);
+    const chats = await api(`/api/chats/${me.id}`);
+    renderList(chats);
+    toast('✅ Чат удален');
+  } catch (e) { alert(e.message); }
+};
+
+const blockUser = async (userId) => {
+  if (!confirm('Заблокировать этого пользователя?')) return;
+  try {
+    await api(`/api/block/${userId}`, 'POST');
+    toast('✅ Пользователь заблокирован');
+  } catch (e) { alert(e.message); }
+};
+
+const toast = msg => {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.hidden = false;
+  setTimeout(() => t.hidden = true, 2500);
+};
+
 /* ---------- Аватарки ---------- */
 const hue = s => [...String(s)].reduce((a, c) => a + c.charCodeAt(0) * 31, 0) % 360;
 const av = (name, seed, cls = '', on = false, img = '') =>
   `<div class="av ${cls}" style="background:hsl(${hue(seed)} 50% 48%)">${img ? `<img src="${esc(img)}" alt="">` : esc((name || '?')[0].toUpperCase())}${on ? '<i></i>' : ''}</div>`;
 const uav = (u, cls = '', dot = false) => av(u.username, u.id, cls, dot && u.online, u.avatar);
-const cav = (c, cls = '') => c.type === 'group' ? av(c.name, c.id, cls, false, c.avatar) : c.peer ? uav(c.peer, cls, true) : av('?', c.id, cls);
-const titleH = c => nmH(title(c), c.type === 'direct' && c.peer && c.peer.verified);
-const title = c => c.type === 'group' ? c.name : (c.peer ? c.peer.username : 'Удалённый аккаунт');
+const cav = (c, cls = '') => c.type !== 'direct' ? av(c.name, c.id, cls, false, c.avatar) : c.peer ? uav(c.peer, cls, true) : av('?', c.id, cls);
+const titleH = c => nmH((c.type === 'channel' ? '📢 ' : '') + title(c), c.type === 'direct' && c.peer && c.peer.verified);
+const title = c => c.type !== 'direct' ? c.name : (c.peer ? c.peer.username : 'Удалённый аккаунт');
 
 /* ---------- Файлы ---------- */
 const fileEl = $('#file');
@@ -260,6 +335,7 @@ function upload(blob, kind, onp) {
     const x = new XMLHttpRequest();
     x.open('POST', `/api/upload?userId=${me.id}&kind=${kind}`);
     x.setRequestHeader('Content-Type', blob.type || 'application/octet-stream');
+    x.setRequestHeader('Authorization', 'Bearer ' + me.token);
     x.upload.onprogress = e => e.lengthComputable && onp && onp(Math.round(e.loaded / e.total * 100));
     x.onload = () => {
       let d = {}; try { d = JSON.parse(x.responseText); } catch {}
@@ -294,22 +370,23 @@ $('#authForm').onsubmit = async e => {
     const d = reg
       ? await api('/api/register', 'POST', {username: $('#an').value, handle: $('#ah').value, email: $('#ae').value, password: $('#ap').value})
       : await api('/api/login', 'POST', {email: $('#ae').value, password: $('#ap').value});
-    me = d.user; save(); boot();
+    me = {...d.user, token: d.token}; save(); boot();
   } catch (x) { $('#aerr').textContent = x.message; }
 };
 
 function boot() {
   $('#auth').hidden = true;
   $('#app').hidden = false;
-  paintMe(); renderList(); connect();
+  paintMe(); setMars(me.mars || 0); renderList(); connect();
 }
 const paintMe = () => { $('#meBtn').innerHTML = uav(me, 'xs') + '<span>Профиль</span>'; };
 
 function logout(msg) {
+  if (me && me.token) fetch('/api/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + me.token}}).catch(() => {});
   localStorage.removeItem('ovk_user');
   me = null; cur = null; query = ''; found = []; pend = null; opened = false;
   if (ws) { ws.onclose = null; ws.close(); }
-  chats = new Map(); msgs = new Map();
+  chats = new Map(); msgs = new Map(); catalog = new Map(); foundCh = [];
   closeModal();
   $('#q').value = '';
   $('#app').hidden = true; $('#app').classList.remove('open');
@@ -325,6 +402,7 @@ async function checkSession() {
     me = {...me, ...await api('/api/profile/' + me.id)};
     save(); paintMe();
   } catch (e) {
+    if (!me) return false; // api() уже вышел из аккаунта (сессия устарела)
     if (/найден/.test(e.message)) {
       logout('Сервер не нашёл ваш аккаунт: данные на сервере были сброшены. Зарегистрируйтесь или войдите снова.');
       return false;
@@ -341,8 +419,9 @@ function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
   ws.onopen = async () => {
     if (!await checkSession()) return;
-    ws.send(JSON.stringify({type: 'connect', userId: me.id}));
+    ws.send(JSON.stringify({type: 'connect', token: me.token, active: !document.hidden}));
     $('#conn').hidden = true;
+    loadCatalog();
     await loadChats();
     if (opened) { // после обрыва подтягиваем пропущенное
       msgs.forEach((_, k) => { if (k !== cur) msgs.delete(k); });
@@ -353,7 +432,10 @@ function connect() {
   ws.onmessage = e => onWs(JSON.parse(e.data));
   ws.onclose = () => { $('#conn').hidden = false; if (me) setTimeout(connect, 2000); };
 }
+// Сообщаем серверу, видна ли вкладка: пока видна, идёт время для Mars
+function sendActive() { if (ws && ws.readyState === 1) ws.send(JSON.stringify({type: 'active', active: !document.hidden})); }
 function onVisible() {
+  sendActive();
   if (document.hidden || !me) return;
   if (cur) { markRead(); renderList(); }
   if (!ws || ws.readyState > 1) connect();
@@ -410,6 +492,12 @@ async function onWs(m) {
     if (cur === d.chatId) renderHead();
   } else if (m.type === 'chat') {
     loadChats();
+  } else if (m.type === 'wallet') {
+    setMars(d.mars);
+  } else if (m.type === 'gift') {
+    toast('🎁 Вам подарили подарок!');
+  } else if (m.type === 'auth') {
+    logout('Сессия устарела, войдите снова.');
   }
 }
 
@@ -417,7 +505,7 @@ async function onWs(m) {
 const others = c => c.type === 'direct' ? (c.peer ? [c.peer.id] : []) : c.members.filter(u => u.id !== me.id).map(u => u.id);
 // В группе сообщение считается прочитанным, когда его увидел хотя бы один участник
 const isRead = (c, ts) => others(c).some(id => ((c.reads || {})[id] || '') >= ts);
-const tick = (c, ts) => { const r = isRead(c, ts); return `<span class="tk ${r ? 'rd' : ''}" data-t="${ts}">${r ? '✓✓' : '✓'}</span>`; };
+const tick = (c, ts) => { if (c.type === 'channel') return ''; const r = isRead(c, ts); return `<span class="tk ${r ? 'rd' : ''}" data-t="${ts}">${r ? '✓✓' : '✓'}</span>`; };
 function updateTicks() {
   const c = chats.get(cur);
   if (!c) return;
@@ -429,22 +517,26 @@ function updateTicks() {
 }
 
 /* ---------- Список чатов и поиск ---------- */
-const mlabel = m => m.media ? (m.media.kind === 'video' ? '🎥 Видео' : '📷 Фото') : '';
+const mlabel = m => m.gift ? '🎁 Подарок' : m.media ? (m.media.kind === 'video' ? '🎥 Видео' : '📷 Фото') : '';
 function preview(c) {
   const l = c.last;
-  if (!l) return c.type === 'group' ? c.members.length + ' участн.' : 'Нет сообщений';
+  if (!l) return c.type === 'group' ? c.members.length + ' участн.' : c.type === 'channel' ? subs(c.subscribers) : 'Нет сообщений';
   let who = '';
-  if (l.senderId === me.id) who = 'Вы: ';
+  if (c.type === 'channel') who = '';
+  else if (l.senderId === me.id) who = 'Вы: ';
   else if (c.type === 'group') { const u = c.members.find(x => x.id === l.senderId); who = (u ? u.username : '?') + ': '; }
   return who + [mlabel(l), l.text].filter(Boolean).join(' ');
 }
 function renderList() {
   const q = query.toLowerCase().replace(/^@/, '');
-  const ts = c => c.last ? +new Date(c.last.timestamp) : (c.id === cur ? Infinity : 0);
-  let a = [...chats.values()].filter(c => c.last || c.id === cur).sort((x, y) => ts(y) - ts(x));
-  if (q) a = a.filter(c => title(c).toLowerCase().includes(q) || (c.peer && c.peer.handle.includes(q)));
+  const ts = c => c.last ? +new Date(c.last.timestamp) : (c.id === cur ? Infinity : c.type !== 'direct' ? +new Date(c.createdAt || 0) : 0);
+  let a = [...chats.values()].filter(c => c.last || c.id === cur || c.type !== 'direct').sort((x, y) => ts(y) - ts(x));
+  if (q) a = a.filter(c => title(c).toLowerCase().includes(q) || (c.peer && c.peer.handle.includes(q)) || (c.handle && c.handle.includes(q)));
   const have = new Set(a.filter(c => c.peer).map(c => c.peer.id));
   const people = q ? found.filter(u => !have.has(u.id)) : [];
+  const chans = q ? foundCh.filter(c => !chats.has(c.id)) : [];
+  const chansHtml = chans.length ? '<div class="sec">Каналы</div>' + chans.map(c =>
+    `<div class="it" data-ch="${esc(c.id)}">${av(c.name, c.id, '', false, c.avatar)}<div class="im">${nmH('📢 ' + c.name, false)}<div class="lm"><span>${subs(c.subscribers)}${c.handle ? ' · @' + esc(c.handle) : ''}</span></div></div></div>`).join('') : '';
 
   const chatsHtml = a.map(c => {
     const n = c.unread || 0;
@@ -456,13 +548,15 @@ function renderList() {
   const peopleHtml = people.length ? '<div class="sec">Люди</div>' + people.map(u =>
     `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
 
-  $('#list').innerHTML = chatsHtml + peopleHtml ||
-    `<div class="sec">${q ? 'Ничего не найдено' : 'Чатов пока нет. Найдите человека по имени или @юзернейму.'}</div>`;
+  $('#list').innerHTML = chatsHtml + chansHtml + peopleHtml ||
+    `<div class="sec">${q ? 'Ничего не найдено' : 'Чатов пока нет. Найдите человека или канал через поиск.'}</div>`;
 }
 $('#list').onclick = e => {
   const it = e.target.closest('.it');
   if (!it) return;
-  if (it.dataset.c) openChat(it.dataset.c); else openUser(+it.dataset.u);
+  if (it.dataset.c) openChat(it.dataset.c);
+  else if (it.dataset.ch) channelPreview(foundCh.find(c => c.id === it.dataset.ch));
+  else openUser(+it.dataset.u);
 };
 let st;
 $('#q').oninput = e => {
@@ -470,11 +564,14 @@ $('#q').oninput = e => {
   renderList(); // меняется только список, поле поиска остаётся на месте — клавиатура не закрывается
   clearTimeout(st);
   const q = query.replace(/^@/, '');
-  if (!q) { found = []; return; }
+  if (!q) { found = []; foundCh = []; return; }
   st = setTimeout(async () => {
     try {
-      const r = await api(`/api/users/search?q=${encodeURIComponent(q)}&userId=${me.id}`);
-      if (query === e.target.value.trim()) { found = r; renderList(); }
+      const [u, ch] = await Promise.all([
+        api(`/api/users/search?q=${encodeURIComponent(q)}`),
+        api(`/api/channels/search?q=${encodeURIComponent(q)}`)
+      ]);
+      if (query === e.target.value.trim()) { found = u; foundCh = ch; renderList(); }
     } catch {}
   }, 250);
 };
@@ -501,7 +598,7 @@ async function openUser(uid) {
     const c = await api('/api/chats', 'POST', {userId: me.id, peerId: uid});
     if (!chats.has(c.id)) chats.set(c.id, c);
     closeModal();
-    $('#q').value = ''; query = ''; found = [];
+    $('#q').value = ''; query = ''; found = []; foundCh = [];
     openChat(c.id);
   } catch (x) { alert(x.message); }
 }
@@ -511,15 +608,26 @@ function renderHead() {
   const c = chats.get(cur);
   if (!c) return;
   const t = typing.has(cur), on = c.peer && c.peer.online;
-  const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : (on ? 'в сети' : 'не в сети');
+  const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : c.type === 'channel' ? subs(c.subscribers) : (on ? 'в сети' : 'не в сети');
+  const canWrite = c.type !== 'channel' || c.creator === me.id; // в канал пишет только автор
+  $('#form').hidden = !canWrite; $('#rdonly').hidden = canWrite;
   $('#hd').innerHTML = cav(c, 's') +
     `<div class="im">${titleH(c)}<small class="${t || on ? 'ty' : ''}">${sub}</small></div>`;
 }
-$('#hd').onclick = () => {
+$('#hd').onclick = e => {
   const c = chats.get(cur);
   if (!c) return;
-  if (c.type === 'group') groupInfo(c.id); else if (c.peer) userProfile(c.peer);
+  if (c.type === 'group') groupInfo(c.id); else if (c.type === 'channel') channelInfo(c.id); else if (c.peer) userProfile(c.peer);
 };
+
+// Удаление чата по долгому нажатию на шапку
+let hdLongPress;
+$('#hd').onmousedown = () => {
+  hdLongPress = setTimeout(() => {
+    if (confirm('Удалить чат?')) deleteChat(cur);
+  }, 800);
+};
+$('#hd').onmouseup = $('#hd').onmouseleave = () => clearTimeout(hdLongPress);
 
 /* ---------- Сообщения ---------- */
 let stick = true;
@@ -544,7 +652,8 @@ function msgHtml(c, l, i) {
     const u = c.members.find(x => x.id === m.senderId);
     who = `<b>${esc(u ? u.username : '?')}${u && u.verified ? BADGE : ''}</b>`;
   }
-  return h + `<div class="m ${mine ? 'me' : ''} ${m.media ? 'mm' : ''}">${who}${m.media ? mediaHtml(m.media) : ''}${m.text ? `<span class="tx">${esc(m.text)}</span>` : ''}<time>${hm(m.timestamp)}${mine ? tick(c, m.timestamp) : ''}</time></div>`;
+  const ch = c.type === 'channel';
+  return h + `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''}">${who}${m.gift ? giftBubble(m.gift, mine) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text ? `<span class="tx">${esc(m.text)}</span>` : ''}<time>${hm(m.timestamp)}${mine && !ch ? tick(c, m.timestamp) : ''}</time></div>`;
 }
 function renderMsgs() {
   const c = chats.get(cur), l = msgs.get(cur) || [];
@@ -563,6 +672,32 @@ msgsEl.onclick = e => {
   if (i) { $('#lbi').src = i.src; $('#lb').hidden = false; }
 };
 $('#lb').onclick = () => { $('#lb').hidden = true; $('#lbi').src = ''; };
+
+// Контекстное меню для сообщений (долгое нажатие или правый клик)
+msgsEl.oncontextmenu = async e => {
+  const msg = e.target.closest('.m');
+  if (!msg) return;
+  e.preventDefault();
+  
+  // Найдем индекс сообщения
+  const msgs = msgsEl.querySelectorAll('.m');
+  const idx = [...msgs].indexOf(msg);
+  if (idx === -1) return;
+  
+  const msgList = Array.from(msgs.get(cur) || []);
+  const m = msgList[idx];
+  if (!m) return;
+  
+  const mine = m.senderId === me.id;
+  if (!mine) return; // Только свои сообщения можно редактировать/удалять
+  
+  const choice = confirm(`Выберите действие:\nОК = Редактировать\nОтмена = Удалить`);
+  if (choice) {
+    editMessage(m.id, m.text, cur);
+  } else {
+    deleteMessage(m.id, cur);
+  }
+};
 
 /* ---------- Ввод и вложения ---------- */
 const inp = $('#inp');
@@ -667,7 +802,10 @@ $('#meBtn').onclick = myProfile;
 function myProfile() {
   modal(`<div style="text-align:center"><div id="pav">${uav(me, 'l')}</div>
 <button class="lnk" id="pph">Сменить фото</button><button class="lnk" id="prm" ${me.avatar ? '' : 'hidden'}>Убрать</button>
-${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}${BADGE}</div>` : ''}</div>
+${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}${BADGE}</div>` : ''}
+<div style="font-weight:600;margin:4px 0">👽 <span class="mars-n">${me.mars || 0}</span> Mars</div></div>
+<div class="sec" style="padding:8px 0 6px">Мои подарки</div><div class="gg" id="pgifts"></div>
+<div class="row"><button type="button" class="btn g" id="pshop">🎁 Магазин подарков</button></div>
 <form id="pf" style="margin-top:12px">
 <div class="f"><label>Имя</label><input id="pn" value="${esc(me.username)}" maxlength="40"></div>
 <div class="f"><label>Юзернейм</label><input id="ph" value="${esc(me.handle)}" maxlength="21" autocapitalize="off" autocomplete="off"></div>
@@ -678,7 +816,7 @@ ${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}
 
   const saveAv = async url => {
     const d = await api('/api/profile/' + me.id, 'PUT', {avatar: url});
-    me = d.user; save(); paintMe();
+    me = {...me, ...d.user}; save(); paintMe();
     const pav = $('#pav'); if (pav) { pav.innerHTML = uav(me, 'l'); $('#prm').hidden = !me.avatar; }
   };
   $('#pph').onclick = async () => {
@@ -693,10 +831,12 @@ ${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}
     e.preventDefault();
     try {
       const d = await api('/api/profile/' + me.id, 'PUT', {username: $('#pn').value, handle: $('#ph').value, bio: $('#pb').value});
-      me = d.user; save(); paintMe(); closeModal();
+      me = {...me, ...d.user}; save(); paintMe(); closeModal();
     } catch (x) { $('#perr').textContent = x.message; }
   };
   $('#lo').onclick = () => logout();
+  $('#pshop').onclick = () => shop();
+  loadGifts(me.id, $('#pgifts'), true);
 }
 
 function userProfile(u) {
@@ -705,8 +845,12 @@ function userProfile(u) {
 <div style="color:var(--p)">@${esc(u.handle)}</div>
 <div style="color:var(--t2);font-size:13px">${u.online ? 'в сети' : 'не в сети'}</div>
 ${u.bio ? `<p style="margin-top:12px">${esc(u.bio)}</p>` : ''}</div>
-<div class="row"><button class="btn" id="wr">Написать</button><button class="btn g" data-x>Закрыть</button></div>`);
+<div class="sec" style="padding:12px 0 6px">Подарки</div><div class="gg" id="pgifts"></div>
+<div class="row"><button class="btn" id="wr">Написать</button><button class="btn g" id="wg">🎁 Подарить</button></div>
+<div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
   $('#wr').onclick = () => openUser(u.id);
+  $('#wg').onclick = () => shop(u);
+  loadGifts(u.id, $('#pgifts'), false);
 }
 
 /* ---------- Группы ---------- */
@@ -772,7 +916,7 @@ function addMembers(id) {
   };
 }
 
-$('#newGroup').onclick = () => {
+function newGroup() {
   modal(`<h2 style="margin-bottom:12px">Новая группа</h2>
 <div class="f"><label>Название</label><input id="gn" maxlength="40"></div><div id="pk"></div>
 <div class="err" id="ge"></div>
@@ -786,7 +930,244 @@ $('#newGroup').onclick = () => {
       chats.set(g.id, g); closeModal(); openChat(g.id);
     } catch (x) { $('#ge').textContent = x.message; }
   };
+}
+
+/* ---------- Создать: группа или канал ---------- */
+$('#newGroup').onclick = () => {
+  modal(`<h2 style="margin-bottom:12px">Создать</h2>
+<div class="row" style="margin-top:0"><button class="btn g" id="mkg">👥 Новая группа</button></div>
+<div class="row"><button class="btn g" id="mkc">📢 Новый канал</button></div>
+<div class="row"><button type="button" class="btn g" data-x>Отмена</button></div>`);
+  $('#mkg').onclick = newGroup;
+  $('#mkc').onclick = newChannel;
 };
+
+/* ---------- Каналы ---------- */
+const plural = (n, f) => f[n % 10 === 1 && n % 100 !== 11 ? 0 : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 1 : 2];
+const subs = n => n + ' ' + plural(n, ['подписчик', 'подписчика', 'подписчиков']);
+let foundCh = [];
+
+function newChannel() {
+  modal(`<h2 style="margin-bottom:12px">Новый канал</h2>
+<div class="f"><label>Название</label><input id="cn" maxlength="40"></div>
+<div class="f"><label>Описание</label><textarea id="cd" rows="2" maxlength="200"></textarea></div>
+<div class="f"><label>Юзернейм канала (необязательно)</label><input id="chh" maxlength="21" autocapitalize="off" autocomplete="off" placeholder="латиница, цифры и _"></div>
+<div class="err" id="ge"></div>
+<div class="row"><button class="btn" id="cok">Создать канал</button><button type="button" class="btn g" data-x>Отмена</button></div>`);
+  $('#cok').onclick = async () => {
+    try {
+      const c = await api('/api/channels', 'POST', {name: $('#cn').value, description: $('#cd').value, handle: $('#chh').value});
+      chats.set(c.id, c); closeModal(); openChat(c.id);
+    } catch (x) { $('#ge').textContent = x.message; }
+  };
+}
+
+function channelPreview(ch) {
+  if (!ch) return;
+  modal(`<div style="text-align:center">${av(ch.name, ch.id, 'l', false, ch.avatar)}
+<h2 style="margin-top:12px">📢 ${esc(ch.name)}</h2>
+${ch.handle ? `<div style="color:var(--p)">@${esc(ch.handle)}</div>` : ''}
+<div style="color:var(--t2);font-size:13px">${subs(ch.subscribers)}</div>
+${ch.description ? `<p style="margin-top:12px">${esc(ch.description)}</p>` : ''}</div>
+<div class="err" id="ge"></div>
+<div class="row"><button class="btn" id="cj">Подписаться</button><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+  $('#cj').onclick = async () => {
+    try {
+      const c = await api(`/api/channels/${encodeURIComponent(ch.id)}/join`, 'POST', {});
+      chats.set(c.id, c);
+      $('#q').value = ''; query = ''; found = []; foundCh = [];
+      closeModal(); openChat(c.id);
+    } catch (x) { $('#ge').textContent = x.message; }
+  };
+}
+
+function channelInfo(id) {
+  const c = chats.get(id);
+  if (!c) return;
+  if (c.creator !== me.id) { // подписчик: описание и отписка
+    modal(`<div style="text-align:center">${cav(c, 'l')}
+<h2 style="margin-top:12px">📢 ${esc(c.name)}</h2>
+${c.handle ? `<div style="color:var(--p)">@${esc(c.handle)}</div>` : ''}
+<div style="color:var(--t2);font-size:13px">${subs(c.subscribers)}</div>
+${c.description ? `<p style="margin-top:12px">${esc(c.description)}</p>` : ''}</div>
+<div class="err" id="ge"></div>
+<div class="row"><button class="btn r" id="cl">Отписаться</button><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+    $('#cl').onclick = async () => {
+      try {
+        await api(`/api/channels/${encodeURIComponent(id)}/leave`, 'POST', {});
+        chats.delete(id);
+        if (cur === id) $('#back').click();
+        closeModal(); renderList();
+      } catch (x) { $('#ge').textContent = x.message; }
+    };
+    return;
+  }
+  // автор: фото, название, описание, юзернейм, список подписчиков
+  modal(`<div style="text-align:center"><div id="gav">${cav(c, 'l')}</div>
+<button class="lnk" id="gph">Сменить фото</button><button class="lnk" id="grm" ${c.avatar ? '' : 'hidden'}>Убрать</button></div>
+<form id="gf" style="margin-top:12px">
+<div class="f"><label>Название канала</label><input id="gname" value="${esc(c.name)}" maxlength="40"></div>
+<div class="f"><label>Описание</label><textarea id="gdesc" rows="2" maxlength="200">${esc(c.description)}</textarea></div>
+<div class="f"><label>Юзернейм канала</label><input id="ghandle" value="${esc(c.handle)}" maxlength="21" autocapitalize="off" autocomplete="off"></div>
+<div class="err" id="ge"></div>
+<button class="btn">Сохранить</button></form>
+<div class="sec" style="padding-left:0;margin-top:10px">${subs(c.subscribers)}</div>
+<div style="max-height:200px;overflow:auto">${(c.members || []).map(u =>
+  `<div class="it" style="padding-left:0;padding-right:0;cursor:default">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified, u.id === me.id ? ' (вы)' : '')}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
+<div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+  const patch = async body => {
+    const g = await api('/api/channels/' + encodeURIComponent(id), 'PUT', body);
+    putChat(g);
+    const gav = $('#gav'); if (gav) { gav.innerHTML = cav(g, 'l'); $('#grm').hidden = !g.avatar; }
+  };
+  $('#gf').onsubmit = async e => {
+    e.preventDefault();
+    try { await patch({name: $('#gname').value, description: $('#gdesc').value, handle: $('#ghandle').value}); closeModal(); }
+    catch (x) { $('#ge').textContent = x.message; }
+  };
+  $('#gph').onclick = async () => {
+    const f = await pickFile('image/*');
+    if (!f) return;
+    const b = $('#gph'); b.textContent = 'Загрузка…'; b.disabled = true;
+    try { await patch({avatar: await uploadAvatar(f)}); } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
+    if ($('#gph')) { b.textContent = 'Сменить фото'; b.disabled = false; }
+  };
+  $('#grm').onclick = () => patch({avatar: ''}).catch(x => { $('#ge').textContent = x.message; });
+}
+
+/* ---------- Mars и подарки ---------- */
+let catalog = new Map(); // kind -> {emoji, name, price, supply, sold, bg}
+const kindInfo = k => catalog.get(k) || {emoji: '🎁', name: 'Подарок', price: 0, supply: 0, sold: 0, bg: ['#c9ced6', '#9aa3b0']};
+const gradient = k => `linear-gradient(150deg,${k.bg[0]},${k.bg[1]})`;
+
+function setMars(n) {
+  if (!me) return;
+  me.mars = n; save();
+  document.querySelectorAll('.mars-n').forEach(e => { e.textContent = n; });
+}
+let toastT;
+function toast(t) {
+  const el = $('#toast');
+  el.textContent = t; el.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 3000);
+}
+async function loadCatalog() {
+  try {
+    const d = await api('/api/shop');
+    catalog = new Map(d.catalog.map(c => [c.kind, c]));
+    setMars(d.mars);
+    if (cur && msgs.has(cur)) renderMsgs(); // подарки в чате теперь рисуются с картинкой
+  } catch {}
+}
+
+const giftCard = g => {
+  const k = kindInfo(g.kind);
+  return `<div class="gc" data-g="${esc(g.id)}" style="background:${gradient(k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div></div>`;
+};
+// Подарок в переписке
+const giftBubble = (g, mine) => {
+  const k = kindInfo(g.kind);
+  return `<div class="gb" style="background:${gradient(k)}"><div class="gt">🎁 ${mine ? 'Вы отправили подарок' : 'Подарок для вас'}</div><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gt">#${g.serial}${k.supply ? ' из ' + k.supply : ''}</div></div>`;
+};
+
+// Витрина подарков в профиле
+async function loadGifts(uid, box, mine) {
+  try {
+    const l = await api('/api/gifts/' + uid);
+    if (!document.body.contains(box)) return;
+    box.innerHTML = l.length ? l.map(giftCard).join('') : '<div style="color:var(--t2);font-size:14px;grid-column:1/-1">Пока нет подарков</div>';
+    box.onclick = e => {
+      const el = e.target.closest('[data-g]');
+      if (el) giftInfo(l.find(g => g.id === el.dataset.g), mine, () => (mine ? myProfile() : closeModal()));
+    };
+  } catch {}
+}
+
+function giftInfo(g, mine, back) {
+  if (!g) return;
+  const k = kindInfo(g.kind);
+  modal(`<div class="gc big" style="background:${gradient(k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div></div>
+<div style="text-align:center;margin-top:12px;font-weight:600">№${g.serial}${k.supply ? ' из ' + k.supply : ''}</div>
+<div style="text-align:center;color:var(--t2);font-size:13px;margin-top:4px">${g.from ? 'От ' + esc(g.from.username) + ' (@' + esc(g.from.handle) + ') · ' : ''}${new Date(g.at).toLocaleDateString('ru-RU')}</div>
+<div class="err" id="ge"></div>
+<div class="row">${mine ? '<button class="btn" id="gtr">Передать</button>' : ''}<button type="button" class="btn g" id="gbk">Назад</button></div>`);
+  $('#gbk').onclick = back;
+  if (mine) $('#gtr').onclick = () => pickUser('Кому передать подарок?', u => {
+    if (!confirm(`Передать «${k.name} №${g.serial}» пользователю ${u.username}? Подарок уйдёт из вашего профиля.`)) return;
+    api(`/api/gifts/${encodeURIComponent(g.id)}/transfer`, 'POST', {toId: u.id})
+      .then(() => { toast('Подарок передан'); myProfile(); })
+      .catch(x => alert(x.message));
+  }, () => giftInfo(g, mine, back));
+}
+
+// Выбор одного человека
+function pickUser(titleText, onPick, back) {
+  modal(`<h2 style="margin-bottom:12px">${esc(titleText)}</h2>
+<div class="f"><input id="pus" placeholder="Поиск по имени или @юзернейму" autocomplete="off" autocapitalize="off"></div>
+<div id="pul" style="max-height:260px;overflow:auto"></div>
+<div class="row"><button type="button" class="btn g" id="pbk">Назад</button></div>`);
+  let t, res = [];
+  const find = async () => {
+    try {
+      res = await api(`/api/users/search?q=${encodeURIComponent($('#pus').value.replace(/^@/, ''))}`);
+      $('#pul').innerHTML = res.map(u => `<div class="it" data-p="${u.id}" style="padding-left:0">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')
+        || '<div class="sec" style="padding-left:0">Никого не нашли</div>';
+    } catch {}
+  };
+  $('#pus').oninput = () => { clearTimeout(t); t = setTimeout(find, 250); };
+  $('#pul').onclick = e => { const el = e.target.closest('[data-p]'); if (el) onPick(res.find(u => u.id == el.dataset.p)); };
+  $('#pbk').onclick = back || closeModal;
+  find();
+}
+
+$('#wallet').onclick = () => shop();
+
+// Магазин. to — кому дарим (если открыт из чужого профиля)
+async function shop(to) {
+  modal('<div class="sec" style="padding:0">Загрузка…</div>');
+  let d;
+  try { d = await api('/api/shop'); }
+  catch (x) { modal(`<div class="err">${esc(x.message)}</div><div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`); return; }
+  catalog = new Map(d.catalog.map(c => [c.kind, c]));
+  setMars(d.mars);
+  modal(`<h2>🎁 Магазин подарков</h2>
+<div style="margin:6px 0 4px;font-weight:600">👽 <span class="mars-n">${me.mars}</span> Mars</div>
+<div style="color:var(--t2);font-size:13px;margin-bottom:10px">Mars начисляются за время в приложении: ${d.perMin} в минуту, пока вкладка открыта.</div>
+${to ? `<div style="margin-bottom:10px;font-weight:600">Подарок для ${esc(to.username)}</div>` : ''}
+<div class="gg">${d.catalog.map(c => {
+    const left = c.supply - c.sold;
+    return `<div class="gc ${left ? '' : 'off'}" data-k="${c.kind}" style="background:${gradient(c)}"><div class="gi">${c.emoji}</div><div class="gn">${esc(c.name)}</div><div class="gs">👽 ${c.price}</div><div class="gs">${left ? 'осталось ' + left : 'распродано'}</div></div>`;
+  }).join('')}</div>
+<div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
+  $('#card').querySelector('.gg').onclick = e => {
+    const el = e.target.closest('[data-k]');
+    if (el && !el.classList.contains('off')) giftBuy(el.dataset.k, to);
+  };
+}
+
+function giftBuy(kind, to) {
+  const k = kindInfo(kind);
+  modal(`<div class="gc big" style="background:${gradient(k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div></div>
+<div style="text-align:center;margin-top:12px;font-weight:600">👽 ${k.price} Mars</div>
+<div style="text-align:center;color:var(--t2);font-size:13px">Осталось ${k.supply - k.sold} из ${k.supply} · у вас 👽 <span class="mars-n">${me.mars}</span></div>
+${to ? `<div class="f" style="margin-top:12px"><label>Сообщение для ${esc(to.username)} (необязательно)</label><input id="gmsg" maxlength="120"></div>` : ''}
+<div class="err" id="ge"></div>
+<div class="row">${to
+    ? `<button class="btn" id="gb1">Подарить ${esc(to.username)} за 👽 ${k.price}</button>`
+    : `<button class="btn" id="gb1">Купить себе за 👽 ${k.price}</button><button class="btn g" id="gb2">Подарить другу…</button>`}</div>
+<div class="row"><button type="button" class="btn g" id="gbk">Назад</button></div>`);
+  $('#gbk').onclick = () => shop(to);
+  if (!to) $('#gb2').onclick = () => pickUser('Кому подарить?', u => giftBuy(kind, u), () => giftBuy(kind));
+  $('#gb1').onclick = async () => {
+    const b = $('#gb1'); b.disabled = true;
+    try {
+      const r = await api('/api/gifts/buy', 'POST', {kind, toId: to && to.id, message: to ? $('#gmsg').value : ''});
+      setMars(r.mars);
+      if (to) { toast(`🎁 Подарок отправлен: ${to.username}`); openUser(to.id); }
+      else { toast(`Куплено: ${k.name} №${r.gift.serial}`); myProfile(); }
+    } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; b.disabled = false; }
+  };
+}
 
 /* ---------- Клавиатура на телефоне: подгоняем высоту под видимую область ---------- */
 if (window.visualViewport) {
