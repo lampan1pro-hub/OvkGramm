@@ -231,6 +231,70 @@ body{font-family:Roboto,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-s
 @media(max-width:768px){#side{width:100%}}
 
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ===== Плавный «заглаженный» дизайн в стиле Telegram ===== */
+button,input,textarea{transition:background .15s,border-color .15s,box-shadow .15s,transform .1s}
+.it,.bbtn,.btn,.gc,.gb,.card{transition:border-radius .2s,background .15s,transform .15s,box-shadow .2s}
+
+/* Шапка чата — без резкой границы, мягкая тень и мягкое нижнее скругление */
+.rh{border-bottom:0;box-shadow:0 1px 10px rgba(16,35,47,.10);border-radius:0 0 20px 20px}
+
+/* Поле ввода — капсула на сером фоне, как в ТГ */
+#form{gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+#inp{background:var(--bg);border:1px solid transparent;border-radius:24px;padding:10px 16px}
+#inp:focus{background:#fff;border-color:var(--p);box-shadow:0 0 0 3px rgba(51,144,236,.12)}
+
+/* Кнопка отправки и круглые иконки */
+#send,.ib{border-radius:50%}
+#send:hover{background:rgba(51,144,236,.12)}
+
+/* Пузыри сообщений — более мягкие, с одним «хвостом» */
+.m{border-radius:18px 18px 18px 6px}
+.m.me{border-radius:18px 18px 6px 18px}
+.m.mm{border-radius:16px}
+.m.ch{border-radius:16px}
+.m video,.m img.ph{border-radius:14px}
+
+/* Кнопки — мягко закруглённые */
+.btn{border-radius:14px}
+.bbtn{border-radius:12px}
+.gc{border-radius:22px}
+.gb{border-radius:18px}
+.lnk{border-radius:12px;padding:6px 12px}
+.lnk:hover{background:rgba(51,144,236,.10)}
+
+/* Поля в формах и поиск — округлее */
+.f input,.f textarea,#q{border-radius:14px}
+
+/* Окна и карточки */
+.card,.modal .card{border-radius:24px}
+.modal{background:rgba(0,0,0,.45);backdrop-filter:blur(6px)}
+
+/* Список чатов */
+.it{border-radius:16px}
+
+/* Мелочи: бейдж, разделитель дат, кошелёк, тост, превью вложения */
+.bd{border-radius:12px}
+.day{border-radius:14px}
+#wallet{border-radius:16px}
+#toast{border-radius:22px}
+#pend .th{border-radius:16px}
+#conn{border-radius:12px;margin:0 10px 6px}
+.mb{border-radius:50%;padding:2px 8px}
+.mb:hover{background:rgba(112,117,121,.12)}
+
+/* Блок «только автор канала может писать» и панель редактирования — мягче */
+#rdonly{border-radius:0}
+#editbar{border-radius:0}
+
+/* Авторизация — карточка и кнопки ещё мягче */
+#auth .card{border-radius:28px}
+#auth .btn{border-radius:16px}
+
+/* Тонкий круглый скроллбар */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
 </style>
 </head>
 <body>
