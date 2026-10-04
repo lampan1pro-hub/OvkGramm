@@ -208,7 +208,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, storage: pool ? 'datab
 const sockets = new Map(); // userId -> Set<ws>
 
 // Галочка у аккаунтов с этими юзернеймами. Свой список: VERIFIED_HANDLES=saimon,durov,lesha
-const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha')
+const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha,NAKRYTKA_BOT')
     .split(',').map(x => x.trim().replace(/^@/, '').toLowerCase()).filter(Boolean));
 
 // Бесконечные Mars. Свой список: UNLIMITED_MARS_HANDLES=saimon,другой
@@ -219,7 +219,7 @@ const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
 
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
-    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id)
+    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), bot: !!u.isBot
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u) });
 
@@ -406,6 +406,14 @@ app.post('/api/chats', (req, res) => {
         chat = { id: directId(me, peer), type: 'direct', members: [me, peer], reads: {}, createdAt: new Date().toISOString() };
         chats.push(chat);
         write(F.chats, chats);
+        const peerU = users.find(u => u.id === peer);
+        if (peerU && peerU.isBot) {
+            const msgs = read(F.messages);
+            msgs.push({ id: crypto.randomUUID(), chatId: chat.id, senderId: peer,
+                text: `👋 Привет! Я бот накрутки подписчиков.\nНажми «▶️ Старт» внизу, выбери канал и количество — 1 подписчик = ${BOOST_PRICE} Mars. Подписчики появятся в твоём канале, как настоящие.`,
+                timestamp: new Date().toISOString() });
+            write(F.messages, msgs);
+        }
     }
     res.json(one(chat, me));
 });
@@ -659,7 +667,7 @@ app.get('/api/shop', (req, res) => {
     const sold = {};
     read(F.gifts).forEach(g => { sold[g.kind] = (sold[g.kind] || 0) + 1; });
     const me = read(F.users).find(u => u.id === req.uid);
-    res.json({ catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), ...(me ? walletOf(me) : { mars: 0 }), perMin: MARS_PER_MIN });
+    res.json({ catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), ...(me ? walletOf(me) : { mars: 0 }), perMin: MARS_PER_MIN, boostPrice: BOOST_PRICE });
 });
 
 // Подарки пользователя — видны всем, это витрина в профиле
@@ -716,6 +724,101 @@ app.post('/api/gifts/:id/transfer', async (req, res) => {
     res.json({ success: true });
 });
 
+
+
+// ---------- Бот накрутки NAKRYTKA_BOT ----------
+// Обычный пользователь с флагом isBot: находится в поиске, виден в списке подписчиков,
+// онлайн не бывает. За Mars создаёт аккаунты со случайными никами и подписывает на канал.
+const BOOST_PRICE = Number(process.env.BOOST_PRICE ?? 3); // Mars за одного подписчика
+const BOT_HANDLE = 'NAKRYTKA_BOT';
+const MAX_BOTS = 20000; // потолок, чтобы база не разрасталась бесконечно
+const NICK_A = ['Cool','Super','Mega','Pro','Lucky','Crazy','Happy','Neon','Cyber','Dark','Swift','Clever','Cosmic','Royal','Iron','Wild','Silent','Golden','Pixel','Turbo'];
+const NICK_B = ['Fox','Wolf','Bear','Cat','Dragon','Tiger','Hawk','Shark','Panda','Robot','Wizard','Ninja','Phoenix','Raccoon','Owl','Viper','Falcon','Whale','Raven','Crow'];
+const botUser = () => read(F.users).find(u => u.handle === BOT_HANDLE);
+
+function ensureBot() {
+    const users = read(F.users);
+    if (users.some(u => u.handle === BOT_HANDLE)) return;
+    users.push({
+        id: Date.now(), username: 'Накрутка 🤖', handle: BOT_HANDLE,
+        email: 'nakrytka@bot.local', password: hashPass(crypto.randomBytes(16).toString('hex')),
+        bio: `Бот накрутки подписчиков · 1 подписчик = ${BOOST_PRICE} Mars`,
+        avatar: '', mars: 0, isBot: true, createdAt: new Date().toISOString()
+    });
+    write(F.users, users);
+    console.log('🤖 Бот накрутки создан: @' + BOT_HANDLE);
+}
+
+app.post('/api/boost', async (req, res) => {
+    const chId = String(req.body.channelId || '');
+    const count = Math.floor(Number(req.body.count));
+    const chats = read(F.chats);
+    const ch = chats.find(c => c.id === chId && c.type === 'channel');
+    if (!ch || ch.creator !== req.uid) return res.status(400).json({ error: 'Выберите свой канал' });
+    if (!(count >= 1)) return res.status(400).json({ error: 'Минимум 1 подписчик' });
+    if (count > 500) return res.status(400).json({ error: 'За раз можно добавить не больше 500 подписчиков' });
+
+    const users = read(F.users);
+    const buyer = users.find(u => u.id === req.uid);
+    const bot = botUser();
+    if (!bot) return res.status(500).json({ error: 'Бот не найден' });
+    const cost = count * BOOST_PRICE;
+    const unl = isUnlimited(buyer);
+    if (!unl && (buyer.mars || 0) < cost) return res.status(400).json({ error: `Не хватает Mars: нужно ${cost}, у вас ${buyer.mars || 0}` });
+    if (users.filter(u => u.isBot).length + count > MAX_BOTS) return res.status(400).json({ error: 'Лимит подписчиков исчерпан, попробуйте меньше' });
+
+    // Случайные ники, как у живых: Прилагательное + Существо + цифры
+    const handles = new Set(users.map(u => u.handle));
+    const fresh = [];
+    for (let i = 0; i < count; i++) {
+        let a, b, handle;
+        do {
+            a = NICK_A[Math.floor(Math.random() * NICK_A.length)];
+            b = NICK_B[Math.floor(Math.random() * NICK_B.length)];
+            handle = (a + b + '_' + Math.floor(1000 + Math.random() * 9000)).toLowerCase();
+        } while (handles.has(handle));
+        handles.add(handle);
+        fresh.push({
+            id: Date.now() + Math.floor(Math.random() * 1e6) + i,
+            username: a + ' ' + b, handle,
+            email: handle + '@bot.local', password: hashPass(crypto.randomBytes(16).toString('hex')),
+            bio: '', avatar: '', mars: 0, isBot: true, createdAt: new Date().toISOString()
+        });
+    }
+
+    users.push(...fresh);
+    // Новые подписчики не «непрочитанные»: история для них уже прочитана
+    const last = read(F.messages).filter(m => m.chatId === ch.id).pop();
+    ch.reads = ch.reads || {};
+    fresh.forEach(u => { ch.reads[u.id] = last ? last.timestamp : ''; ch.members.push(u.id); });
+    if (!unl) buyer.mars -= cost;
+    write(F.users, users);
+    write(F.chats, chats);
+
+    // Подтверждение от бота в личном чате с покупателем
+    const bchatId = directId(bot.id, buyer.id);
+    let bchat = read(F.chats).find(c => c.id === bchatId);
+    if (!bchat) {
+        const chats2 = read(F.chats);
+        bchat = { id: bchatId, type: 'direct', members: [bot.id, buyer.id], reads: {}, createdAt: new Date().toISOString() };
+        chats2.push(bchat);
+        write(F.chats, chats2);
+    }
+    const msg = {
+        id: crypto.randomUUID(), chatId: bchatId, senderId: bot.id,
+        text: `✅ Готово! Начислено ${count} подписчиков на канал «${ch.name}». Списано 👽 ${cost} Mars.`,
+        timestamp: new Date().toISOString()
+    };
+    const msgs = read(F.messages);
+    msgs.push(msg);
+    write(F.messages, msgs);
+
+    sendTo([buyer.id], { type: 'message', data: msg });
+    sendTo(ch.members, { type: 'chat' }); // у всех обновится число подписчиков
+    sendTo([buyer.id], { type: 'wallet', data: walletOf(buyer) });
+    await persist();
+    res.json({ success: true, added: count, cost, ...walletOf(buyer) });
+});
 
 // ---------- NFT-обои ----------
 // Пак обоев: случайный дроп, вероятность зависит от редкости (сумма chance = 100%).
@@ -1026,6 +1129,7 @@ async function init() {
         try { meta = JSON.parse(fs.readFileSync(mf, 'utf8')); } catch { fs.writeFileSync(mf, JSON.stringify(meta)); }
     }
     migrate();
+    ensureBot();
     await persist();
 
     console.log(`💾 Хранилище: ${pool ? 'база данных PostgreSQL' : 'файлы в ' + DIR}`);
