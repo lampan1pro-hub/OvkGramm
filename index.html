@@ -155,6 +155,9 @@ input,textarea{font:inherit;color:inherit}
 /* Обои: пузыри чуть прозрачные, чтобы фон было видно */
 #msgs.haswall .m{background:rgba(255,255,255,.93)}
 #msgs.haswall .m.me{background:rgba(0,132,255,.93)}
+#botui{display:flex;flex-direction:column;gap:10px;padding:12px 12px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--b)}
+[data-theme=dark] #botui{background:#171a1f;color:var(--t)}
+#botui select{width:100%;padding:10px 12px;border:1px solid var(--b);border-radius:8px;font:inherit;background:inherit;color:inherit}
 [data-theme=dark] #msgs.haswall .m{background:rgba(23,26,31,.88)}
 [data-theme=dark] #msgs.haswall .m.me{background:rgba(58,127,216,.9)}
 /* Мифическая редкость и анимация дропа */
@@ -226,6 +229,7 @@ input,textarea{font:inherit;color:inherit}
         <textarea id="inp" rows="1" placeholder="Сообщение" enterkeyhint="send"></textarea>
         <button id="send" aria-label="Отправить">➤</button>
       </form>
+      <div id="botui" hidden></div>
       <div id="rdonly" hidden>Писать в канал может только его автор</div>
     </section>
   </main>
@@ -632,10 +636,13 @@ function renderHead() {
   const c = chats.get(cur);
   if (!c) return;
   const t = typing.has(cur), on = c.peer && c.peer.online;
-  const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : c.type === 'channel' ? subs(c.subscribers) : (on ? 'в сети' : 'не в сети');
+  const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : c.type === 'channel' ? subs(c.subscribers) : (c.peer && c.peer.bot ? '🤖 бот' : (on ? 'в сети' : 'не в сети'));
   const iBlock = c.type === 'direct' && c.peer && blocked.has(c.peer.id);
-  const canWrite = !iBlock && (c.type !== 'channel' || c.creator === me.id); // в канал пишет только автор
-  $('#form').hidden = !canWrite; $('#rdonly').hidden = canWrite;
+  const isBotChat = c.type === 'direct' && c.peer && c.peer.bot;
+  const canWrite = !iBlock && !isBotChat && (c.type !== 'channel' || c.creator === me.id); // в канал пишет только автор
+  $('#form').hidden = !canWrite; $('#rdonly').hidden = canWrite || isBotChat;
+  $('#botui').hidden = !isBotChat;
+  if (isBotChat) drawBotui();
   if (!canWrite) setHtml($('#rdonly'), iBlock ? 'Вы заблокировали этого пользователя · <button class="lnk" id="unb">Разблокировать</button>' : 'Писать в канал может только его автор');
   setHtml($('#hd'), cav(c, 's') +
     `<div class="im">${titleH(c)}<small class="${t || on ? 'ty' : ''}">${sub}</small></div>`);
@@ -1052,8 +1059,50 @@ ${c.description ? `<p style="margin-top:12px">${esc(c.description)}</p>` : ''}</
 }
 
 
+
+/* ---------- Бот накрутки NAKRYTKA_BOT ---------- */
+function drawBotui() {
+  const el = $('#botui');
+  el.innerHTML = `<button class="btn" id="bstart">▶️ Старт</button>`;
+  $('#bstart').onclick = boostPanel;
+}
+function boostPanel() {
+  const mine = [...chats.values()].filter(c => c.type === 'channel' && c.creator === me.id);
+  if (!mine.length) {
+    $('#botui').innerHTML = `<div style="text-align:center;color:var(--t2)">У вас пока нет каналов.<br>Создайте канал через кнопку «＋».</div>
+<div class="row" style="margin-top:0"><button class="btn g" id="bbk">◀️ Назад</button></div>`;
+    $('#bbk').onclick = drawBotui;
+    return;
+  }
+  $('#botui').innerHTML = `
+<div class="f" style="margin:0"><label>Канал</label><select id="bch">${mine.map(c => `<option value="${esc(c.id)}">${esc(c.name)} · ${c.subscribers} подп.</option>`).join('')}</select></div>
+<div class="f" style="margin:0"><label>Подписчиков (за раз до 500)</label><input id="bn" type="number" min="1" max="500" value="10" inputmode="numeric"></div>
+<div class="row" style="margin-top:0">${[10, 50, 100, 500].map(n => `<button type="button" class="btn g" data-n="${n}">${n}</button>`).join('')}</div>
+<div id="bsum" style="font-weight:600"></div>
+<div class="err" id="be"></div>
+<div class="row" style="margin-top:0"><button class="btn" id="bpay">💸 Оплатить</button><button class="btn g" id="bbk">Назад</button></div>`;
+  const sum = () => {
+    const n = Math.max(0, Math.min(500, Math.floor(Number($('#bn').value) || 0)));
+    $('#bsum').textContent = `👽 ${n * boostPrice} Mars · у вас 👽 ${marsTxt()} · 1 подписчик = ${boostPrice} Mars`;
+  };
+  $('#bn').oninput = sum;
+  $('#botui').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { $('#bn').value = b.dataset.n; sum(); });
+  $('#bbk').onclick = drawBotui;
+  $('#bpay').onclick = async () => {
+    const b = $('#bpay'); b.disabled = true;
+    try {
+      const r = await api('/api/boost', 'POST', { channelId: $('#bch').value, count: Math.floor(Number($('#bn').value) || 0) });
+      setMars(r.mars, r.unlimited);
+      toast(`✅ +${r.added} подписчиков начислено`);
+      drawBotui();
+      loadChats(); // обновится число подписчиков у всех
+    } catch (x) { const e = $('#be'); if (e) e.textContent = x.message; b.disabled = false; }
+  };
+  sum();
+}
+
 /* ---------- NFT-обои: коллекция, паки, фон чатов ---------- */
-let wallsCat = new Map(), myWalls = [], wallDefault = null, wallPackPrice = 200;
+let wallsCat = new Map(), myWalls = [], wallDefault = null, wallPackPrice = 200, boostPrice = 3;
 const wallCat = k => wallsCat.get(k) || { kind: k, name: 'Обои', rarity: 'common', chance: 0, bg: ['#c9ced6', '#9aa3b0'], pattern: '' };
 const WALL_RN = { common: 'Обычные', rare: 'Редкие', epic: 'Эпические', legendary: 'Легендарные', mythic: 'Мифические' };
 async function loadWalls() {
@@ -1212,6 +1261,7 @@ async function loadCatalog() {
     const d = await api('/api/shop');
     catalog = new Map(d.catalog.map(c => [c.kind, c]));
     setMars(d.mars, d.unlimited);
+    boostPrice = d.boostPrice || 3;
     if (cur && msgs.has(cur)) rerender(); // подарки в чате теперь рисуются с картинкой
   } catch {}
 }
