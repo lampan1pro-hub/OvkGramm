@@ -150,6 +150,81 @@ input,textarea{font:inherit;color:inherit}
 #back{display:grid}
 .m{max-width:85%}
 }
+/* ===== Оформление в стиле Telegram ===== */
+:root{--p:#3390ec;--pd:#2b7fd1;--pl:#e8f2fd;--bg:#f4f4f5;--t:#000;--t2:#707579;--b:#e7e7e9;--on:#4dcd5e;--out:#effdde;--outt:#5ca75a}
+body{font-family:Roboto,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:15px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18);border-radius:3px}
+#auth{background:linear-gradient(160deg,#6bbdf8,#3390ec)}
+.card{border-radius:16px}.logo{font-size:26px;letter-spacing:.5px}
+.btn{border-radius:10px;text-transform:none;letter-spacing:.2px}
+.f input,.f textarea{border-radius:10px}
+/* список чатов */
+#side{width:400px;border-right:1px solid var(--b)}
+.sh{padding:8px 12px 6px}
+.sh h1{font-size:19px;font-weight:600;color:var(--t)}
+.ib{background:transparent;color:var(--t2)}
+.ib:hover{background:rgba(112,117,121,.12)}
+#meBtn{background:transparent}
+#meBtn:hover{background:rgba(112,117,121,.12)}
+#q{background:var(--bg);border:2px solid transparent;border-radius:22px;padding:9px 16px}
+#q:focus{background:#fff;border-color:var(--p)}
+#wallet{background:var(--pl);color:var(--pd);border-radius:10px}
+.it{padding:9px 10px;margin:0 6px;border-radius:10px;gap:11px}
+.it:hover{background:var(--bg)}
+.it.on{background:var(--p);color:#fff}
+.it.on .lm,.it.on .tm{color:rgba(255,255,255,.85)}
+.it.on .tm .tk,.it.on .tm .tk.rd{color:#fff}
+.it.on .bd{background:#fff;color:var(--p)}
+.it.on .av i{border-color:var(--p)}
+.r1 .nm{font-weight:500;font-size:16px}
+.bd{background:#c4c9cc;min-width:22px;line-height:22px;border-radius:11px;font-weight:500}
+.sec{color:var(--p);font-weight:500;padding:12px 16px 4px}
+.lm{font-size:15px}
+/* чат */
+#chat{background:#8fbf8c;background-image:radial-gradient(circle at 20% 15%,rgba(255,255,255,.28) 0,transparent 42%),radial-gradient(circle at 85% 80%,rgba(255,255,255,.2) 0,transparent 45%),linear-gradient(165deg,#d4e6b5 0%,#a9d4a0 40%,#7fbfa6 100%)}
+#empty{align-self:center}
+#empty h2,#empty p{display:inline-block;background:rgba(0,0,0,.28);color:#fff;border-radius:14px;padding:3px 12px;margin:3px 0;font-size:14px;font-weight:500}
+#empty div{display:none}
+.rh{padding:6px 12px;border-bottom:0;box-shadow:0 1px 2px rgba(16,35,47,.12);z-index:2}
+#hd .nm{font-size:16px;font-weight:500}
+#msgs{padding:10px 14px;gap:2px}
+.day{background:rgba(0,0,0,.28);color:#fff;font-weight:500;padding:3px 12px;border-radius:14px}
+.m{border-radius:12px 12px 12px 4px;padding:6px 10px 6px;background:#fff;color:#000;box-shadow:0 1px 1px rgba(16,35,47,.16)}
+.m.me{background:var(--out);color:#000;border-radius:12px 12px 4px 12px}
+.m.ch{border-radius:12px}
+.m time{color:#9aa3a8;font-size:12px}
+.m.me time{color:var(--outt)}
+.m.me .tk{color:var(--outt)}
+.m.me .tk.rd{color:#4fae4e}
+.m b{color:var(--p);font-weight:500}
+.m.mm{padding:3px;border-radius:12px}
+#pend,#form{background:#fff;border-top:0}
+#form{padding:8px 10px calc(8px + env(safe-area-inset-bottom));align-items:flex-end}
+#inp{border:0;background:#fff;border-radius:0;padding:9px 8px}
+#inp:focus{border:0}
+#send{background:transparent;color:var(--p);font-size:22px;width:44px}
+#send:hover{background:rgba(51,144,236,.1)}
+#rdonly{background:#fff;border-top:0;color:var(--p);font-weight:500;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+#rdonly .btn{background:transparent;color:var(--p);text-transform:uppercase;letter-spacing:.5px;max-width:none;font-weight:500}
+#rdonly .btn:hover:not(:disabled){background:rgba(51,144,236,.1)}
+#editbar{background:#fff}
+/* кнопки бота — как inline-клавиатура Telegram */
+.bb{margin:8px -4px -2px}
+.bbtn{background:rgba(51,144,236,.12);color:var(--pd);border-radius:8px;font-weight:500}
+.bbtn:hover{background:rgba(51,144,236,.2)}
+/* окна */
+.modal{background:rgba(0,0,0,.4)}
+.modal .card{border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.25)}
+/* подарки / NFT */
+.gc .gp,.gb .gt:last-child{}
+.gc .gp{display:inline-block;margin-top:3px;font-size:10px;font-weight:700;background:rgba(0,0,0,.28);border-radius:8px;padding:0 6px;line-height:16px}
+.gb{border-radius:12px}
+.bdl{text-align:center;margin-top:8px;font-size:13px;font-weight:600;color:var(--t)}
+.bdw{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:8px}
+.bdc{display:inline-flex;align-items:center;gap:4px;font-size:12px;background:var(--bg);border-radius:10px;padding:2px 8px 2px 3px}
+.bdc i{width:14px;height:14px;border-radius:50%;display:inline-block}
+@media(max-width:768px){#side{width:100%}}
+
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -247,7 +322,7 @@ const dl = t => new Date(t).toLocaleDateString('ru-RU', {day: 'numeric', month: 
 /* ---------- Аватарки ---------- */
 const hue = s => [...String(s)].reduce((a, c) => a + c.charCodeAt(0) * 31, 0) % 360;
 const av = (name, seed, cls = '', on = false, img = '') =>
-  `<div class="av ${cls}" style="background:hsl(${hue(seed)} 50% 48%)">${img ? `<img src="${esc(img)}" alt="">` : esc((name || '?')[0].toUpperCase())}${on ? '<i></i>' : ''}</div>`;
+  `<div class="av ${cls}" style="background:linear-gradient(180deg,hsl(${hue(seed)} 65% 64%),hsl(${hue(seed)} 60% 48%))">${img ? `<img src="${esc(img)}" alt="">` : esc((name || '?')[0].toUpperCase())}${on ? '<i></i>' : ''}</div>`;
 const uav = (u, cls = '', dot = false) => av(u.username, u.id, cls, dot && u.online, u.avatar);
 const cav = (c, cls = '') => c.type !== 'direct' ? av(c.name, c.id, cls, false, c.avatar) : c.peer ? uav(c.peer, cls, true) : av('?', c.id, cls);
 const titleH = c => nmH((c.type === 'channel' ? '📢 ' : '') + title(c), c.type === 'direct' && c.peer && c.peer.verified);
@@ -546,7 +621,10 @@ function renderListNow() {
   const peopleHtml = people.length ? '<div class="sec">Люди</div>' + people.map(u =>
     `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
 
-  setHtml($('#list'), chatsHtml + chansHtml + peopleHtml ||
+  const botHtml = sFocus && !q && botUser ? '<div class="sec">Рекомендуем</div>' +
+    `<div class="it" data-u="${botUser.id}">${uav(botUser, '', false)}<div class="im">${nmH(botUser.username, true)}<div class="lm"><span>@${esc(botUser.handle)} · накрутка подписчиков на канал</span></div></div></div>` +
+    (a.length ? '<div class="sec">Чаты</div>' : '') : '';
+  setHtml($('#list'), botHtml + chatsHtml + chansHtml + peopleHtml ||
     `<div class="sec">${q ? 'Ничего не найдено' : 'Чатов пока нет. Найдите человека или канал через поиск.'}</div>`);
 }
 let rl = 0; // перерисовываем не чаще раза за кадр
@@ -558,6 +636,16 @@ $('#list').onclick = e => {
   else if (it.dataset.ch) channelPreview(foundCh.find(c => c.id === it.dataset.ch));
   else openUser(+it.dataset.u);
 };
+// Пока в поиске ничего не введено, сразу предлагаем бота накрутки
+let sFocus = false, botUser = null;
+async function loadBot() {
+  if (botUser) return;
+  try { botUser = (await api('/api/users/search?q=nakrytka_bot')).find(u => u.bot) || null; renderList(); } catch {}
+}
+$('#q').onfocus = () => { sFocus = true; renderList(); loadBot(); };
+document.addEventListener('pointerdown', e => {
+  if (sFocus && !e.target.closest('#q') && !e.target.closest('#list')) { sFocus = false; renderList(); }
+});
 let st;
 $('#q').oninput = e => {
   query = e.target.value.trim();
@@ -597,7 +685,7 @@ async function openUser(uid) {
   try {
     const c = await api('/api/chats', 'POST', {userId: me.id, peerId: uid});
     if (!chats.has(c.id)) chats.set(c.id, c);
-    closeModal();
+    closeModal(); sFocus = false;
     $('#q').value = ''; query = ''; found = []; foundCh = [];
     openChat(c.id);
   } catch (x) { alert(x.message); }
@@ -677,8 +765,10 @@ msgsEl.onclick = async e => {
   if (bb) {
     const row = bb.closest('.m');
     bb.disabled = true;
-    try { await api('/api/bot/click', 'POST', {messageId: row.dataset.id, row: bb.dataset.r, col: bb.dataset.k}); }
-    catch (x) { toast(x.message); bb.disabled = false; }
+    try {
+      const r = await api('/api/bot/click', 'POST', {messageId: row.dataset.id, row: bb.dataset.r, col: bb.dataset.k});
+      if (r.ask) { bb.disabled = false; askCount(r.ask, r.max, r.price); }
+    } catch (x) { toast(x.message); bb.disabled = false; }
     return;
   }
   const b = e.target.closest('.mb');
@@ -761,6 +851,26 @@ $('#form').onsubmit = e => {
 };
 
 /* ---------- Окна ---------- */
+// Окно «своё количество подписчиков» для бота
+function askCount(chanId, max, price) {
+  modal(`<h2 style="margin-bottom:6px">Своё количество</h2>
+<div style="color:var(--t2);font-size:13px;margin-bottom:12px">1 подписчик = ${price} Mars · максимум ${max}</div>
+<div class="f"><input id="cn" type="number" inputmode="numeric" min="1" max="${max}" placeholder="Например, 250" autocomplete="off"></div>
+<div id="cs" style="font-weight:600;min-height:20px"></div>
+<div class="err" id="ce"></div>
+<div class="row"><button class="btn" id="cok">Продолжить</button><button type="button" class="btn g" data-x>Отмена</button></div>`);
+  const inp = $('#cn');
+  inp.oninput = () => { const n = Math.floor(+inp.value); $('#cs').textContent = n >= 1 ? `К оплате: ${n * price} Mars` : ''; $('#ce').textContent = ''; };
+  inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#cok').click(); } };
+  $('#cok').onclick = async () => {
+    const n = Math.floor(+inp.value);
+    if (!(n >= 1 && n <= max)) { $('#ce').textContent = `Введите число от 1 до ${max}`; return; }
+    $('#cok').disabled = true;
+    try { await api('/api/bot/custom', 'POST', {chanId, n}); closeModal(); }
+    catch (x) { $('#ce').textContent = x.message; $('#cok').disabled = false; }
+  };
+  inp.focus();
+}
 const closeModal = () => { $('#modal').hidden = true; $('#card').innerHTML = ''; };
 const modal = h => { $('#card').innerHTML = h; $('#modal').hidden = false; };
 $('#modal').onclick = e => { if (e.target.id === 'modal' || e.target.closest('[data-x]')) closeModal(); };
@@ -1041,6 +1151,13 @@ const kindInfo = k => catalog.get(k) || {emoji: '🎁', name: 'Подарок', 
 const RARITY = [['common', 'Обычные', 'Обычный'], ['rare', 'Редкие', 'Редкий'], ['epic', 'Эпические', 'Эпический'], ['legendary', 'Легендарные', 'Легендарный']];
 const rarityName = r => (RARITY.find(x => x[0] === r) || RARITY[0])[2];
 const gradient = k => `linear-gradient(150deg,${k.bg[0]},${k.bg[1]})`;
+let backdrops = new Map(); // id -> {name, pct, c}
+const bdOf = g => g && g.bd && backdrops.get(g.bd);
+// Фон конкретного подарка (если фона ещё нет — обычный цвет вида подарка)
+const giftBg = (g, k) => { const b = bdOf(g); return b ? `linear-gradient(150deg,${b.c[0]},${b.c[1]})` : gradient(k); };
+const pctTxt = p => (p < 1 ? String(p) : String(+p.toFixed(1))).replace('.', ',') + '%';
+const bdTier = p => p <= 1 ? 'Мифический' : p <= 3 ? 'Легендарный' : p <= 8 ? 'Эпический' : p <= 14 ? 'Редкий' : 'Обычный';
+const bdLine = g => { const b = bdOf(g); return b ? `Фон «${esc(b.name)}» · ${pctTxt(b.pct)} · ${bdTier(b.pct)}` : ''; };
 
 const marsTxt = () => me.unlimited ? '∞' : (me.mars || 0);
 function setMars(n, unlimited) {
@@ -1060,6 +1177,7 @@ async function loadCatalog() {
   try {
     const d = await api('/api/shop');
     catalog = new Map(d.catalog.map(c => [c.kind, c]));
+    backdrops = new Map((d.backdrops || []).map(b => [b.id, b]));
     setMars(d.mars, d.unlimited);
     if (cur && msgs.has(cur)) rerender(); // подарки в чате теперь рисуются с картинкой
   } catch {}
@@ -1067,12 +1185,13 @@ async function loadCatalog() {
 
 const giftCard = g => {
   const k = kindInfo(g.kind);
-  return `<div class="gc r-${k.rarity}" data-g="${esc(g.id)}" style="background:${gradient(k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div></div>`;
+  const b = bdOf(g);
+  return `<div class="gc r-${k.rarity}" data-g="${esc(g.id)}" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gs">#${g.serial}</div>${b ? `<div class="gp">${pctTxt(b.pct)}</div>` : ''}</div>`;
 };
 // Подарок в переписке
 const giftBubble = (g, mine) => {
   const k = kindInfo(g.kind);
-  return `<div class="gb" style="background:${gradient(k)}"><div class="gt">🎁 ${mine ? 'Вы отправили подарок' : 'Подарок для вас'}</div><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gt">#${g.serial}${k.supply ? ' из ' + k.supply : ''}</div></div>`;
+  return `<div class="gb" style="background:${giftBg(g, k)}"><div class="gt">🎁 ${mine ? 'Вы отправили подарок' : 'Подарок для вас'}</div><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div><div class="gt">#${g.serial}${k.supply ? ' из ' + k.supply : ''}</div>${bdOf(g) ? `<div class="gt">${bdLine(g)}</div>` : ''}</div>`;
 };
 
 // Витрина подарков в профиле
@@ -1091,8 +1210,9 @@ async function loadGifts(uid, box, mine) {
 function giftInfo(g, mine, back) {
   if (!g) return;
   const k = kindInfo(g.kind);
-  modal(`<div class="gc big" style="background:${gradient(k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div></div>
+  modal(`<div class="gc big" style="background:${giftBg(g, k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div></div>
 <div style="text-align:center;margin-top:12px;font-weight:600">№${g.serial}${k.supply ? ' из ' + k.supply : ''} · ${rarityName(k.rarity)}</div>
+${bdOf(g) ? `<div class="bdl">${bdLine(g)}</div>` : ''}
 <div style="text-align:center;color:var(--t2);font-size:13px;margin-top:4px">${g.from ? 'От ' + esc(g.from.username) + ' (@' + esc(g.from.handle) + ') · ' : ''}${new Date(g.at).toLocaleDateString('ru-RU')}</div>
 <div class="err" id="ge"></div>
 <div class="row">${mine ? '<button class="btn" id="gtr">Передать</button>' : ''}<button type="button" class="btn g" id="gbk">Назад</button></div>`);
@@ -1134,6 +1254,7 @@ async function shop(to) {
   try { d = await api('/api/shop'); }
   catch (x) { modal(`<div class="err">${esc(x.message)}</div><div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`); return; }
   catalog = new Map(d.catalog.map(c => [c.kind, c]));
+  backdrops = new Map((d.backdrops || []).map(b => [b.id, b]));
   setMars(d.mars, d.unlimited);
   modal(`<h2>🎁 Магазин подарков</h2>
 <div style="margin:6px 0 4px;font-weight:600">👽 <span class="mars-n">${marsTxt()}</span> Mars</div>
@@ -1158,6 +1279,8 @@ function giftBuy(kind, to) {
   modal(`<div class="gc big" style="background:${gradient(k)}"><div class="gi">${k.emoji}</div><div class="gn">${esc(k.name)}</div></div>
 <div style="text-align:center;margin-top:12px;font-weight:600">👽 ${k.price} Mars</div>
 <div style="text-align:center;color:var(--t2);font-size:13px">${rarityName(k.rarity)} · осталось ${k.supply - k.sold} из ${k.supply} · у вас 👽 <span class="mars-n">${marsTxt()}</span></div>
+<div class="bdl" style="margin-top:10px">🎲 Фон выпадает случайно</div>
+<div class="bdw">${[...backdrops.values()].map(b => `<span class="bdc" title="${esc(b.name)}"><i style="background:linear-gradient(150deg,${b.c[0]},${b.c[1]})"></i>${pctTxt(b.pct)}</span>`).join('')}</div>
 ${to ? `<div class="f" style="margin-top:12px"><label>Сообщение для ${esc(to.username)} (необязательно)</label><input id="gmsg" maxlength="120"></div>` : ''}
 <div class="err" id="ge"></div>
 <div class="row">${to
@@ -1172,7 +1295,7 @@ ${to ? `<div class="f" style="margin-top:12px"><label>Сообщение для 
       const r = await api('/api/gifts/buy', 'POST', {kind, toId: to && to.id, message: to ? $('#gmsg').value : ''});
       setMars(r.mars, r.unlimited);
       if (to) { toast(`🎁 Подарок отправлен: ${to.username}`); openUser(to.id); }
-      else { toast(`Куплено: ${k.name} №${r.gift.serial}`); myProfile(); }
+      else { const b = bdOf(r.gift); toast(`Куплено: ${k.name} №${r.gift.serial}${b ? ' · фон «' + b.name + '» ' + pctTxt(b.pct) : ''}`); myProfile(); }
     } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; b.disabled = false; }
   };
 }
@@ -1360,4 +1483,4 @@ if (window.visualViewport) {
 })();
 </script>
 </body>
-</html>
+  </html>
