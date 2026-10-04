@@ -139,6 +139,30 @@ input,textarea{font:inherit;color:inherit}
 .gc.r-epic{box-shadow:0 0 0 2px #c58bff inset}
 .gc.r-legendary{box-shadow:0 0 0 2px #ffd54a inset,0 0 12px rgba(255,213,74,.55)}
 #hd small.ty:empty{display:none}
+
+/* Тёмная тема */
+[data-theme=dark]{--p:#5aa9ff;--pd:#3f8fe8;--pl:#1b2c42;--bg:#0f1115;--t:#e8eaed;--t2:#9aa0a6;--b:#2a2e36;--on:#31a24c}
+[data-theme=dark] body{background:var(--bg)}
+[data-theme=dark] #app,[data-theme=dark] .card,[data-theme=dark] .rh,[data-theme=dark] #form,[data-theme=dark] #pend,[data-theme=dark] #editbar,[data-theme=dark] #rdonly,[data-theme=dark] .day{background:#171a1f;color:var(--t)}
+[data-theme=dark] .m{background:#22262d;color:var(--t)}
+[data-theme=dark] .m.me{background:var(--p);color:#fff}
+[data-theme=dark] .ib,[data-theme=dark] #meBtn,[data-theme=dark] #q{background:#22262d}
+[data-theme=dark] .ib:hover,[data-theme=dark] #meBtn:hover{background:#2b3038}
+[data-theme=dark] #q:focus{background:#171a1f}
+[data-theme=dark] .it:hover{background:#1b1f25}
+[data-theme=dark] .btn.g{background:#22262d}
+[data-theme=dark] .f input,[data-theme=dark] .f textarea{background:#171a1f;border-color:var(--b)}
+/* Обои: пузыри чуть прозрачные, чтобы фон было видно */
+#msgs.haswall .m{background:rgba(255,255,255,.93)}
+#msgs.haswall .m.me{background:rgba(0,132,255,.93)}
+[data-theme=dark] #msgs.haswall .m{background:rgba(23,26,31,.88)}
+[data-theme=dark] #msgs.haswall .m.me{background:rgba(58,127,216,.9)}
+/* Мифическая редкость и анимация дропа */
+.gc.r-mythic{box-shadow:0 0 0 2px #ff6bcb inset,0 0 16px rgba(255,107,203,.6)}
+@keyframes pop{0%{transform:scale(.3) rotate(-8deg);opacity:0}70%{transform:scale(1.08) rotate(2deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+.pop{animation:pop .5s ease}
+@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-14deg)}75%{transform:rotate(14deg)}}
+.shake{animation:shake .35s ease infinite}
 @media(max-width:400px){.sh h1{font-size:19px}}
 @media(max-width:340px){#meBtn span{display:none}#meBtn{padding:4px}}
 @media(max-width:768px){
@@ -177,6 +201,7 @@ input,textarea{font:inherit;color:inherit}
   <aside id="side">
     <div class="sh">
       <h1>SAIMONGRAM</h1>
+      <button class="ib" id="themeBtn" title="Сменить тему">🌙</button>
       <button class="ib" id="newGroup" title="Создать группу или канал">＋</button>
       <button id="meBtn" title="Мой профиль"></button>
     </div>
@@ -225,6 +250,14 @@ const $ = s => document.querySelector(s);
 const BADGE = '<svg class="vb" role="img" aria-label="Подтверждённый аккаунт"><use href="#vb"/></svg>';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let me = null, ws = null, cur = null, query = '', found = [], opened = false;
+
+/* ---------- Тёмная/светлая тема ---------- */
+const applyTheme = t => {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem('ovk_theme', t);
+  const b = $('#themeBtn'); if (b) b.textContent = t === 'dark' ? '☀️' : '🌙';
+};
+$('#themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 let chats = new Map(), msgs = new Map(), typing = new Map(), pend = null;
 const msgsEl = $('#msgs');
 
@@ -344,7 +377,7 @@ $('#authForm').onsubmit = async e => {
 function boot() {
   $('#auth').hidden = true;
   $('#app').hidden = false;
-  paintMe(); setMars(me.mars || 0, me.unlimited); renderList(); connect();
+  paintMe(); setMars(me.mars || 0, me.unlimited); renderList(); connect(); loadWalls();
 }
 const paintMe = () => { $('#meBtn').innerHTML = uav(me, 'xs') + '<span>Профиль</span>'; };
 
@@ -416,7 +449,7 @@ async function loadChats() {
   try {
     chats = new Map((await api('/api/chats/' + me.id)).map(c => [c.id, c]));
     if (cur && chats.has(cur)) markRead();
-    renderList(); renderHead();
+    renderList(); renderHead(); applyWall();
   } catch {}
 }
 
@@ -574,7 +607,7 @@ async function openChat(id) {
   if (c) c.unread = 0;
   $('#app').classList.add('open');
   $('#empty').hidden = true; $('#room').hidden = false;
-  renderHead(); renderList();
+  renderHead(); renderList(); applyWall();
   if (!msgs.has(id)) {
     msgsEl.innerHTML = '<div class="day">Загрузка…</div>';
     try { msgs.set(id, await getMsgs(id)); } catch { msgs.set(id, []); }
@@ -783,6 +816,7 @@ ${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}
 <div style="font-weight:600;margin:4px 0">👽 <span class="mars-n">${marsTxt()}</span> Mars</div></div>
 <div class="sec" style="padding:8px 0 6px">Мои подарки</div><div class="gg" id="pgifts"></div>
 <div class="row"><button type="button" class="btn g" id="pshop">🎁 Магазин подарков</button></div>
+<div class="row"><button type="button" class="btn g" id="pwalls">🖼 Мои обои</button></div>
 <div class="row"><button type="button" class="btn g" id="pbl">🚫 Заблокированные</button></div>
 <form id="pf" style="margin-top:12px">
 <div class="f"><label>Имя</label><input id="pn" value="${esc(me.username)}" maxlength="40"></div>
@@ -814,6 +848,7 @@ ${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}
   };
   $('#lo').onclick = () => logout();
   $('#pshop').onclick = () => shop();
+  $('#pwalls').onclick = () => wallsUI('profile');
   $('#pbl').onclick = blockedList;
   loadGifts(me.id, $('#pgifts'), true);
 }
@@ -1014,6 +1049,141 @@ ${c.description ? `<p style="margin-top:12px">${esc(c.description)}</p>` : ''}</
     if ($('#gph')) { b.textContent = 'Сменить фото'; b.disabled = false; }
   };
   $('#grm').onclick = () => patch({avatar: ''}).catch(x => { $('#ge').textContent = x.message; });
+}
+
+
+/* ---------- NFT-обои: коллекция, паки, фон чатов ---------- */
+let wallsCat = new Map(), myWalls = [], wallDefault = null, wallPackPrice = 200;
+const wallCat = k => wallsCat.get(k) || { kind: k, name: 'Обои', rarity: 'common', chance: 0, bg: ['#c9ced6', '#9aa3b0'], pattern: '' };
+const WALL_RN = { common: 'Обычные', rare: 'Редкие', epic: 'Эпические', legendary: 'Легендарные', mythic: 'Мифические' };
+async function loadWalls() {
+  try {
+    const d = await api('/api/walls');
+    wallsCat = new Map(d.catalog.map(w => [w.kind, w]));
+    myWalls = d.mine || [];
+    wallDefault = d.defaultWall || null;
+    wallPackPrice = d.packPrice;
+    applyWall();
+  } catch {}
+}
+const wallKey = w => w.kind + ':' + w.serial;
+const wallCss = info => {
+  const grad = `linear-gradient(150deg,${info.bg[0]},${info.bg[1]})`;
+  if (!info.pattern) return grad;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><text x='24' y='100' font-size='52' opacity='.16'>${info.pattern}</text></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}"), ${grad}`;
+};
+// Свои обои чата важнее обоев «на все чаты»
+function applyWall() {
+  const c = chats.get(cur);
+  const ref = (c && c.wall) || wallDefault || null;
+  const info = ref && wallCat(ref.kind);
+  if (info) { msgsEl.style.backgroundImage = wallCss(info); msgsEl.classList.add('haswall'); }
+  else { msgsEl.style.backgroundImage = ''; msgsEl.classList.remove('haswall'); }
+}
+const wallTile = w => {
+  const k = wallCat(w.kind);
+  return `<div class="gc r-${k.rarity}" data-w="${esc(w.id)}" style="background:linear-gradient(150deg,${k.bg[0]},${k.bg[1]})"><div class="gi">${k.pattern || '🖼'}</div><div class="gn">${esc(k.name)}</div><div class="gs">№${w.serial} · ${WALL_RN[k.rarity]}</div></div>`;
+};
+
+// mode: 'profile' — коллекция из профиля, 'chat' — выбор обоев для открытого чата
+async function wallsUI(mode) {
+  let d;
+  try { d = await api('/api/walls'); }
+  catch (x) { modal(`<div class="err">${esc(x.message)}</div><div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`); return; }
+  wallsCat = new Map(d.catalog.map(w => [w.kind, w]));
+  myWalls = d.mine || [];
+  wallDefault = d.defaultWall || null;
+  wallPackPrice = d.packPrice;
+
+  const c = chats.get(cur);
+  const chatWall = mode === 'chat' && c ? (c.wall || null) : null;
+  const defKey = wallDefault ? wallDefault.kind + ':' + wallDefault.serial : '';
+  modal(`<h2>🖼 Мои обои</h2>
+<div style="margin:6px 0;font-weight:600">👽 <span class="mars-n">${marsTxt()}</span> Mars · пак обоев: 👽 ${wallPackPrice}</div>
+<div style="color:var(--t2);font-size:13px;margin-bottom:8px">Каждый пак — случайный дроп. Чем реже обои, тем меньше шанс выпадения. Экземпляр уникален: у него есть номер.</div>
+<div class="row" style="margin-top:0"><button class="btn" id="wp-open">🎲 Открыть пак за 👽 ${wallPackPrice}</button></div>
+<details style="margin:10px 0"><summary style="cursor:pointer;color:var(--t2);font-size:13px">📊 Шансы выпадения</summary>
+<div style="margin-top:6px">${[...wallsCat.values()].map(w => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>${w.pattern || '🖼'} ${esc(w.name)}</span><span style="color:var(--t2)">${WALL_RN[w.rarity]} · ${w.chance}%</span></div>`).join('')}</div></details>
+${mode === 'chat' ? `<div class="sec" style="padding-left:0">Чат «${esc(title(c))}»</div>
+<div class="row" style="margin-top:0">${chatWall ? '<button class="btn r" id="wp-clear">🚫 Убрать обои из чата</button>' : ''}<span style="flex:1;color:var(--t2);font-size:13px;align-self:center">${chatWall ? 'В этом чате свои обои' : (defKey ? 'Фон как у всех чатов (по умолчанию)' : 'Стандартный фон')}</span></div>` : ''}
+<div class="sec" style="padding-left:0">Коллекция: ${myWalls.length}</div>
+<div class="gg" id="wpg">${myWalls.length ? myWalls.map(wallTile).join('') : '<div style="color:var(--t2);font-size:14px;grid-column:1/-1">Пока пусто — откройте первый пак 🎲</div>'}</div>
+<div class="row"><button type="button" class="btn g" id="wp-bk">${mode === 'chat' ? 'Назад' : 'Закрыть'}</button></div>`);
+
+  $('#wp-bk').onclick = () => mode === 'chat' ? chatMenu(cur) : myProfile();
+  $('#wp-open').onclick = () => openWallPack(mode);
+  const clr = $('#wp-clear');
+  if (clr) clr.onclick = async () => {
+    try {
+      await api(`/api/chats/${encodeURIComponent(cur)}/wall`, 'PUT', { wall: null });
+      const cc = chats.get(cur); if (cc) cc.wall = null;
+      applyWall(); toast('Обои убраны'); wallsUI(mode);
+    } catch (x) { toast(x.message); }
+  };
+  $('#wpg').onclick = e => {
+    const el = e.target.closest('[data-w]');
+    if (el) wallPick(myWalls.find(w => w.id === el.dataset.w), mode);
+  };
+}
+
+function wallPick(w, mode) {
+  if (!w) return;
+  const k = wallCat(w.kind);
+  const ref = { kind: w.kind, serial: w.serial };
+  const c = chats.get(cur);
+  const isChatWall = mode === 'chat' && c && c.wall && c.wall.kind === w.kind && c.wall.serial === w.serial;
+  const isDef = wallDefault && wallDefault.kind === w.kind && wallDefault.serial === w.serial;
+  modal(`<div class="gc big pop r-${k.rarity}" style="background:linear-gradient(150deg,${k.bg[0]},${k.bg[1]})"><div class="gi">${k.pattern || '🖼'}</div><div class="gn">${esc(k.name)}</div></div>
+<div style="text-align:center;margin-top:12px;font-weight:600">${WALL_RN[k.rarity]} · шанс выпадения ${k.chance}%</div>
+<div style="text-align:center;color:var(--t2);font-size:13px">Экземпляр №${w.serial} · выпал ${new Date(w.at).toLocaleDateString('ru-RU')}</div>
+<div class="err" id="ge"></div>
+${mode === 'chat' && !isChatWall ? '<div class="row" style="margin-top:0"><button class="btn" id="w-set">🖼 В этот чат</button></div>' : ''}
+${!isDef ? '<div class="row" style="margin-top:0"><button class="btn g" id="w-def">✨ На все чаты (по умолчанию)</button></div>' : ''}
+${isDef ? '<div class="row" style="margin-top:0"><button class="btn r" id="w-def0">🚫 Убрать обои по умолчанию</button></div>' : ''}
+<div class="row"><button type="button" class="btn g" id="w-bk">Назад</button></div>`);
+  $('#w-bk').onclick = () => wallsUI(mode);
+  const set = $('#w-set');
+  if (set) set.onclick = async () => {
+    try {
+      await api(`/api/chats/${encodeURIComponent(cur)}/wall`, 'PUT', { wall: ref });
+      const cc = chats.get(cur); if (cc) cc.wall = ref;
+      applyWall(); toast('Обои установлены в чат'); wallsUI(mode);
+    } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
+  };
+  const def = $('#w-def');
+  if (def) def.onclick = async () => {
+    try {
+      await api('/api/walls/default', 'PUT', { wall: ref });
+      wallDefault = ref; applyWall(); toast('Обои по умолчанию обновлены'); wallsUI(mode);
+    } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
+  };
+  const def0 = $('#w-def0');
+  if (def0) def0.onclick = async () => {
+    try {
+      await api('/api/walls/default', 'PUT', { wall: null });
+      wallDefault = null; applyWall(); toast('Обои по умолчанию убраны'); wallsUI(mode);
+    } catch (x) { const e = $('#ge'); if (e) e.textContent = x.message; }
+  };
+}
+
+// Открытие пака: сначала трясём кубик, потом показываем дроп и его шанс
+async function openWallPack(mode) {
+  modal(`<div style="text-align:center;padding:24px"><div class="shake" style="font-size:64px">🎲</div><div style="margin-top:12px;color:var(--t2)">Открываем пак…</div></div>`);
+  let r;
+  try { r = await api('/api/walls/open', 'POST', {}); }
+  catch (x) { modal(`<div class="err">${esc(x.message)}</div><div class="row"><button type="button" class="btn g" id="pk-bk">Назад</button></div>`); $('#pk-bk').onclick = () => wallsUI(mode); return; }
+  setMars(r.mars, r.unlimited);
+  myWalls.push(r.wall);
+  setTimeout(() => {
+    const k = r.wall.info;
+    modal(`<div class="gc big pop r-${k.rarity}" style="background:linear-gradient(150deg,${k.bg[0]},${k.bg[1]})"><div class="gi">${k.pattern || '🖼'}</div><div class="gn">${esc(k.name)}</div></div>
+<div style="text-align:center;margin-top:12px;font-weight:600">${WALL_RN[k.rarity]} · шанс выпадения был ${k.chance}%</div>
+<div style="text-align:center;color:var(--t2);font-size:13px">Экземпляр №${r.wall.serial} — теперь в вашей коллекции</div>
+<div class="row"><button class="btn" id="pk-use">Использовать</button><button class="btn g" id="pk-ok">Отлично</button></div>`);
+    $('#pk-use').onclick = () => wallPick(r.wall, mode);
+    $('#pk-ok').onclick = () => wallsUI(mode);
+  }, 1100);
 }
 
 /* ---------- Mars и подарки ---------- */
@@ -1278,6 +1448,7 @@ function chatMenu(id) {
   } else {
     items = [['info', 'ℹ️ О канале', 'g'], c.creator === me.id ? ['delall', '🗑 Удалить канал', 'r'] : ['leave', '🚪 Отписаться', 'r']];
   }
+  items.splice(1, 0, ['wall', '🖼 Обои чата', 'g']);
   modal(`<h2 style="margin-bottom:6px">${esc(title(c))}</h2>${items.map(([k, t, cls]) =>
     `<div class="row"><button class="btn ${cls}" data-a="${k}">${t}</button></div>`).join('')}
 <div class="row"><button type="button" class="btn g" data-x>Отмена</button></div>`);
@@ -1285,6 +1456,7 @@ function chatMenu(id) {
 }
 function chatAction(c, a) {
   if (a === 'prof') return userProfile(c.peer);
+  if (a === 'wall') return wallsUI('chat');
   if (a === 'info') return c.type === 'group' ? groupInfo(c.id) : channelInfo(c.id);
   if (a === 'blk' || a === 'unb') return toggleBlock(c.peer, false);
   if (a === 'del') { // личный чат: у меня или у обоих
@@ -1329,6 +1501,7 @@ if (window.visualViewport) {
 
 /* ---------- Запуск ---------- */
 (async () => {
+  applyTheme(localStorage.getItem('ovk_theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   authUI();
   try { me = JSON.parse(localStorage.getItem('ovk_user')); } catch { me = null; }
   if (me && await checkSession()) boot();
