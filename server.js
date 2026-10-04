@@ -13,6 +13,20 @@ const wss = new WebSocket.Server({ server });
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
+// Каждый запрос к /api (кроме входа и регистрации) подписан токеном. Личность берём из токена,
+// а не из userId, который прислал клиент: иначе можно действовать от чужого имени (и тратить чужие Mars).
+const OPEN_API = new Set(['/register', '/login', '/health']);
+app.use('/api', (req, res, next) => {
+    if (OPEN_API.has(req.path)) return next();
+    const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    const s = token && read(F.sessions)[token];
+    if (!s) return res.status(401).json({ error: 'Сессия устарела, войдите снова' });
+    req.uid = s.uid;
+    req.query.userId = String(s.uid);
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) req.body.userId = s.uid;
+    next();
+});
+
 // ---------- Хранилище ----------
 // Папку с данными можно вынести на постоянный диск хостинга: DATA_DIR=/путь/к/диску
 const DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
@@ -21,7 +35,9 @@ fs.mkdirSync(UP, { recursive: true });
 const F = {
     users: path.join(DIR, 'users.json'),
     messages: path.join(DIR, 'messages.json'),
-    chats: path.join(DIR, 'chats.json')
+    chats: path.join(DIR, 'chats.json'),
+    gifts: path.join(DIR, 'gifts.json'),
+    sessions: path.join(DIR, 'sessions.json')
 };
 
 // ---- Хранение ----
@@ -141,10 +157,22 @@ const hashPass = (p, salt = crypto.randomBytes(8).toString('hex')) =>
 const isHash = s => /^[0-9a-f]{16}:[0-9a-f]{64}$/.test(s);
 const checkPass = (p, stored) => isHash(stored) ? hashPass(p, stored.split(':')[0]) === stored : p === stored;
 
+const START_MARS = Number(process.env.START_MARS ?? 10); // стартовый баланс новых аккаунтов
+
+function newSession(uid) {
+    const sessions = read(F.sessions), token = crypto.randomBytes(24).toString('hex');
+    sessions[token] = { uid, at: Date.now() };
+    write(F.sessions, sessions);
+    return token;
+}
+
 // Миграция старых данных
 function migrate() {
     const users = read(F.users);
-    users.forEach(u => { if (!u.handle) u.handle = 'user' + String(u.id).slice(-6); });
+    users.forEach(u => {
+        if (!u.handle) u.handle = 'user' + String(u.id).slice(-6);
+        if (u.mars === undefined) u.mars = START_MARS;
+    });
     write(F.users, users);
 
     const chats = read(F.chats).map(c => c.type ? c :
@@ -185,7 +213,7 @@ const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
     avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id)
 });
-const self = u => ({ ...pub(u), email: u.email });
+const self = u => ({ ...pub(u), email: u.email, mars: u.mars || 0 });
 
 function sendTo(ids, payload, exceptWs) {
     const json = JSON.stringify(payload);
@@ -211,8 +239,13 @@ function shape(chat, me, users, list) {
     if (chat.type === 'direct') {
         const p = byId(chat.members.find(i => i !== me));
         o.peer = p ? pub(p) : null;
-    } else {
+    } else if (chat.type === 'group') {
         o.members = chat.members.map(byId).filter(Boolean).map(pub);
+    } else { // канал
+        o.description = chat.description || '';
+        o.handle = chat.handle || '';
+        o.subscribers = chat.members.length;
+        if (chat.creator === me) o.members = chat.members.map(byId).filter(Boolean).map(pub); // список подписчиков видит автор
     }
     return o;
 }
@@ -262,22 +295,32 @@ app.post('/api/register', async (req, res) => {
 
     const user = {
         id: Date.now(), username, handle, email, password: hashPass(password),
-        bio: '', avatar: '', createdAt: new Date().toISOString()
+        bio: '', avatar: '', mars: START_MARS, createdAt: new Date().toISOString()
     };
     users.push(user);
     write(F.users, users);
+    const token = newSession(user.id);
     await persist();
-    res.json({ success: true, user: self(user) });
+    res.json({ success: true, user: self(user), token });
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     const login = String(req.body.email || '').trim().toLowerCase().replace(/^@/, '');
     const password = String(req.body.password || '');
     const users = read(F.users);
     const user = users.find(u => ((u.email || '').toLowerCase() === login || u.handle === login) && checkPass(password, u.password));
     if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
     if (!isHash(user.password)) { user.password = hashPass(password); write(F.users, users); }
-    res.json({ success: true, user: self(user) });
+    const token = newSession(user.id);
+    await persist();
+    res.json({ success: true, user: self(user), token });
+});
+
+app.post('/api/logout', (req, res) => {
+    const sessions = read(F.sessions);
+    delete sessions[String(req.headers.authorization || '').replace(/^Bearer /, '')];
+    write(F.sessions, sessions);
+    res.json({ success: true });
 });
 
 // ---------- Пользователи ----------
@@ -296,6 +339,7 @@ app.get('/api/profile/:id', (req, res) => {
 });
 
 app.put('/api/profile/:id', (req, res) => {
+    if (Number(req.params.id) !== req.uid) return res.status(403).json({ error: 'Нет доступа' });
     const users = read(F.users);
     const u = users.find(x => x.id === Number(req.params.id));
     if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
@@ -325,7 +369,7 @@ app.put('/api/profile/:id', (req, res) => {
 
 // ---------- Чаты ----------
 app.get('/api/chats/:userId', (req, res) => {
-    const me = Number(req.params.userId);
+    const me = req.uid;
     const users = read(F.users);
     const grouped = new Map();
     read(F.messages).forEach(m => {
@@ -417,11 +461,315 @@ app.post('/api/groups/:id/members', (req, res) => {
     res.json(one(g, me));
 });
 
+// ---------- Каналы ----------
+const cleanHandle = h => String(h || '').trim().replace(/^@/, '').toLowerCase();
+const chanPub = (c, me) => ({
+    id: c.id, name: c.name, handle: c.handle || '', description: c.description || '',
+    avatar: c.avatar || '', subscribers: c.members.length, subscribed: c.members.includes(me)
+});
+const HANDLE_ERR = 'Юзернейм канала: 3–20 символов, латиница, цифры и _';
+
+app.post('/api/channels', (req, res) => {
+    const me = req.uid;
+    const name = String(req.body.name || '').trim().slice(0, 40);
+    const description = String(req.body.description || '').trim().slice(0, 200);
+    const handle = cleanHandle(req.body.handle);
+    if (!name) return res.status(400).json({ error: 'Введите название канала' });
+    if (handle && !HANDLE_RE.test(handle)) return res.status(400).json({ error: HANDLE_ERR });
+
+    const chats = read(F.chats);
+    if (handle && chats.some(c => c.type === 'channel' && c.handle === handle))
+        return res.status(400).json({ error: 'Этот юзернейм канала уже занят' });
+    const ch = {
+        id: 'c_' + Date.now(), type: 'channel', name, description, handle, avatar: '',
+        creator: me, members: [me], reads: {}, createdAt: new Date().toISOString()
+    };
+    chats.push(ch);
+    write(F.chats, chats);
+    res.json(one(ch, me));
+});
+
+// Название, описание, юзернейм и фото канала меняет только автор
+app.put('/api/channels/:id', (req, res) => {
+    const me = req.uid, chats = read(F.chats);
+    const ch = chats.find(c => c.id === req.params.id && c.type === 'channel');
+    if (!ch || ch.creator !== me) return res.status(403).json({ error: 'Нет доступа' });
+
+    const { name, description, handle, avatar } = req.body;
+    if (name !== undefined) {
+        const n = String(name).trim().slice(0, 40);
+        if (!n) return res.status(400).json({ error: 'Название не может быть пустым' });
+        ch.name = n;
+    }
+    if (description !== undefined) ch.description = String(description).trim().slice(0, 200);
+    if (handle !== undefined) {
+        const h = cleanHandle(handle);
+        if (h && !HANDLE_RE.test(h)) return res.status(400).json({ error: HANDLE_ERR });
+        if (h && chats.some(c => c.type === 'channel' && c.id !== ch.id && c.handle === h))
+            return res.status(400).json({ error: 'Этот юзернейм канала уже занят' });
+        ch.handle = h;
+    }
+    if (avatar !== undefined) {
+        if (avatar !== '' && !imageOk(avatar)) return res.status(400).json({ error: 'Некорректное фото' });
+        ch.avatar = avatar;
+    }
+    write(F.chats, chats);
+    sendTo(ch.members, { type: 'chat' });
+    res.json(one(ch, me));
+});
+
+// Получить каналы пользователя (на которые подписан)
+app.get('/api/channels/:userId', (req, res) => {
+    const me = req.uid;
+    res.json(read(F.chats)
+        .filter(c => c.type === 'channel' && c.members.includes(me))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(c => chanPub(c, me)));
+});
+
+// Поиск каналов по названию и @юзернейму
+app.get('/api/channels/search/:q', (req, res) => {
+    const me = req.uid, q = String(req.params.q || '').trim().toLowerCase().replace(/^@/, '');
+    if (!q) return res.json([]);
+    res.json(read(F.chats)
+        .filter(c => c.type === 'channel' && (c.name.toLowerCase().includes(q) || (c.handle || '').includes(q)))
+        .sort((a, b) => b.members.length - a.members.length)
+        .slice(0, 30).map(c => chanPub(c, me)));
+});
+
+app.post('/api/channels/:id/join', (req, res) => {
+    const me = req.uid, chats = read(F.chats);
+    const ch = chats.find(c => c.id === req.params.id && c.type === 'channel');
+    if (!ch) return res.status(404).json({ error: 'Канал не найден' });
+    if (!ch.members.includes(me)) {
+        const last = read(F.messages).filter(m => m.chatId === ch.id).pop();
+        ch.reads = ch.reads || {};
+        ch.reads[me] = last ? last.timestamp : ''; // старые посты не считаются непрочитанными
+        ch.members.push(me);
+        write(F.chats, chats);
+        sendTo(ch.members, { type: 'chat' }); // у автора обновится число подписчиков
+    }
+    res.json(one(ch, me));
+});
+
+app.post('/api/channels/:id/leave', (req, res) => {
+    const me = req.uid, chats = read(F.chats);
+    const ch = chats.find(c => c.id === req.params.id && c.type === 'channel');
+    if (!ch || !ch.members.includes(me)) return res.status(404).json({ error: 'Вы не подписаны на канал' });
+    if (ch.creator === me) return res.status(400).json({ error: 'Автор не может отписаться от своего канала' });
+    ch.members = ch.members.filter(id => id !== me);
+    write(F.chats, chats);
+    sendTo([...ch.members, me], { type: 'chat' });
+    res.json({ success: true });
+});
+
+// ---------- Блокировка пользователей ----------
+const F_blocks = path.join(DIR, 'blocks.json');
+
+app.post('/api/block/:userId', (req, res) => {
+    const me = req.uid, targetId = Number(req.params.userId);
+    if (me === targetId) return res.status(400).json({ error: 'Нельзя заблокировать самого себя' });
+    
+    const blocks = read(F_blocks) || {};
+    if (!blocks[me]) blocks[me] = [];
+    if (!blocks[me].includes(targetId)) blocks[me].push(targetId);
+    write(F_blocks, blocks);
+    
+    res.json({ success: true });
+});
+
+app.post('/api/unblock/:userId', (req, res) => {
+    const me = req.uid, targetId = Number(req.params.userId);
+    const blocks = read(F_blocks) || {};
+    if (blocks[me]) {
+        blocks[me] = blocks[me].filter(id => id !== targetId);
+        write(F_blocks, blocks);
+    }
+    res.json({ success: true });
+});
+
+app.get('/api/blocks', (req, res) => {
+    const me = req.uid;
+    const blocks = read(F_blocks) || {};
+    res.json({ blocked: blocks[me] || [] });
+});
+
+// ---------- Mars и подарки ----------
+// Mars начисляются за время, проведённое в приложении (см. таймер ниже). Подарки — коллекционные:
+// у каждого свой номер (#12 из 100), у каждого есть владелец, подарок можно передать дальше.
+const MARS_PER_MIN = Number(process.env.MARS_PER_MIN) || 1;
+const ADMIN_USER = 'saimon'; // Юзер с бесконечными mars
+const CATALOG = [
+    { kind: 'heart',   emoji: '💝', name: 'Сердечко',  price: 15,   supply: 5000, bg: ['#ff9aa2', '#ff5e7e'] },
+    { kind: 'bear',    emoji: '🧸', name: 'Мишка',     price: 50,   supply: 2000, bg: ['#ffd89b', '#f2a65a'] },
+    { kind: 'rocket',  emoji: '🚀', name: 'Ракета',    price: 120,  supply: 1000, bg: ['#a1c4fd', '#5b7cfa'] },
+    { kind: 'cake',    emoji: '🎂', name: 'Торт',      price: 200,  supply: 500,  bg: ['#fbc2eb', '#d96fcf'] },
+    { kind: 'diamond', emoji: '💎', name: 'Бриллиант', price: 500,  supply: 300,  bg: ['#84fab0', '#2bb3c0'] },
+    { kind: 'crown',   emoji: '👑', name: 'Корона',    price: 1000, supply: 100,  bg: ['#f6d365', '#e8a020'] },
+    { kind: 'alien',   emoji: '👽', name: 'Марсианин', price: 2000, supply: 50,   bg: ['#b0f3a3', '#2f9e44'] },
+    { kind: 'dragon',  emoji: '🐉', name: 'Дракон',    price: 5000, supply: 10,   bg: ['#ff9966', '#c0392b'] }
+];
+const giftOut = (g, users) => {
+    const f = users.find(u => u.id === g.fromId);
+    return {
+        id: g.id, kind: g.kind, serial: g.serial, at: g.at,
+        from: f ? { id: f.id, username: f.username, handle: f.handle, verified: VERIFIED.has(f.handle) } : null
+    };
+};
+
+// Подарок как сообщение в личном чате (чат создаётся, если его ещё нет)
+function giftMessage(from, to, g, text) {
+    const chats = read(F.chats), id = directId(from, to);
+    let chat = chats.find(c => c.id === id);
+    if (!chat) {
+        chat = { id, type: 'direct', members: [from, to], reads: {}, createdAt: new Date().toISOString() };
+        chats.push(chat);
+        write(F.chats, chats);
+    }
+    const msg = {
+        id: crypto.randomUUID(), chatId: id, senderId: from, text,
+        gift: { kind: g.kind, serial: g.serial }, timestamp: new Date().toISOString()
+    };
+    const msgs = read(F.messages);
+    msgs.push(msg);
+    write(F.messages, msgs);
+    sendTo(chat.members, { type: 'message', data: msg });
+}
+
+app.get('/api/shop', (req, res) => {
+    const sold = {};
+    read(F.gifts).forEach(g => { sold[g.kind] = (sold[g.kind] || 0) + 1; });
+    const me = read(F.users).find(u => u.id === req.uid);
+    res.json({ catalog: CATALOG.map(c => ({ ...c, sold: sold[c.kind] || 0 })), mars: me ? me.mars || 0 : 0, perMin: MARS_PER_MIN });
+});
+
+// Подарки пользователя — видны всем, это витрина в профиле
+app.get('/api/gifts/:userId', (req, res) => {
+    const uid = Number(req.params.userId), users = read(F.users);
+    res.json(read(F.gifts).filter(g => g.ownerId === uid)
+        .sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200).map(g => giftOut(g, users)));
+});
+
+// Купить подарок: себе (toId не указан) или другому пользователю
+app.post('/api/gifts/buy', async (req, res) => {
+    const me = req.uid, item = CATALOG.find(c => c.kind === req.body.kind);
+    if (!item) return res.status(400).json({ error: 'Такого подарка нет' });
+    const users = read(F.users), gifts = read(F.gifts);
+    const buyer = users.find(u => u.id === me);
+    const toId = req.body.toId ? Number(req.body.toId) : me;
+    if (!buyer || !users.some(u => u.id === toId)) return res.status(400).json({ error: 'Получатель не найден' });
+
+    const minted = gifts.filter(g => g.kind === item.kind).length;
+    if (minted >= item.supply) return res.status(400).json({ error: 'Этот подарок распродан' });
+    
+    // Админ saimon имеет бесконечные mars
+    const isSaimon = buyer.handle === ADMIN_USER;
+    if (!isSaimon && (buyer.mars || 0) < item.price)
+        return res.status(400).json({ error: `Не хватает Mars: нужно ${item.price}, у вас ${buyer.mars || 0}` });
+
+    const now = new Date().toISOString();
+    if (!isSaimon) buyer.mars -= item.price;
+    const gift = { id: 'k_' + crypto.randomUUID(), kind: item.kind, serial: minted + 1, ownerId: toId, fromId: me, price: item.price, at: now };
+    gifts.push(gift);
+    write(F.users, users);
+    write(F.gifts, gifts);
+    sendTo([me], { type: 'wallet', data: { mars: buyer.mars } });
+    if (toId !== me) {
+        giftMessage(me, toId, gift, String(req.body.message || '').trim().slice(0, 120));
+        sendTo([toId], { type: 'gift', data: { chatId: directId(me, toId) } });
+    }
+    await persist();
+    res.json({ success: true, mars: buyer.mars, gift: giftOut(gift, users) });
+});
+
+// Передать свой подарок другому (бесплатно)
+app.post('/api/gifts/:id/transfer', async (req, res) => {
+    const me = req.uid, toId = Number(req.body.toId);
+    const gifts = read(F.gifts), g = gifts.find(x => x.id === req.params.id);
+    if (!g || g.ownerId !== me) return res.status(403).json({ error: 'Это не ваш подарок' });
+    if (toId === me || !read(F.users).some(u => u.id === toId)) return res.status(400).json({ error: 'Выберите другого получателя' });
+    g.ownerId = toId;
+    g.fromId = me;
+    g.at = new Date().toISOString();
+    write(F.gifts, gifts);
+    giftMessage(me, toId, g, String(req.body.message || '').trim().slice(0, 120));
+    await persist();
+    res.json({ success: true });
+});
+
 app.get('/api/messages/:chatId', (req, res) => {
     const me = Number(req.query.userId);
     const chat = read(F.chats).find(c => String(c.id) === req.params.chatId);
     if (!chat || !chat.members.includes(me)) return res.status(403).json({ error: 'Нет доступа' });
     res.json(read(F.messages).filter(m => m.chatId === chat.id).slice(-500));
+});
+
+// ---------- Удаление и редактирование сообщений ----------
+app.delete('/api/messages/:messageId', (req, res) => {
+    const me = req.uid;
+    const messages = read(F.messages);
+    const msg = messages.find(m => m.id === req.params.messageId);
+    
+    if (!msg) return res.status(404).json({ error: 'Сообщение не найдено' });
+    if (msg.senderId !== me) return res.status(403).json({ error: 'Вы не можете удалить чужое сообщение' });
+    
+    const newMessages = messages.filter(m => m.id !== req.params.messageId);
+    write(F.messages, newMessages);
+    broadcast({ type: 'messageDeleted', data: { messageId: msg.id, chatId: msg.chatId } });
+    
+    res.json({ success: true });
+});
+
+app.put('/api/messages/:messageId', (req, res) => {
+    const me = req.uid;
+    const messages = read(F.messages);
+    const msg = messages.find(m => m.id === req.params.messageId);
+    
+    if (!msg) return res.status(404).json({ error: 'Сообщение не найдено' });
+    if (msg.senderId !== me) return res.status(403).json({ error: 'Вы не можете редактировать чужое сообщение' });
+    
+    const newText = String(req.body.text || '').trim().slice(0, 4000);
+    if (!newText) return res.status(400).json({ error: 'Текст не может быть пустым' });
+    
+    msg.text = newText;
+    msg.edited = new Date().toISOString();
+    write(F.messages, messages);
+    broadcast({ type: 'messageEdited', data: { messageId: msg.id, chatId: msg.chatId, text: newText, edited: msg.edited } });
+    
+    res.json({ success: true, message: msg });
+});
+
+// ---------- Удаление чатов ----------
+app.delete('/api/chats/:chatId', (req, res) => {
+    const me = req.uid;
+    const chats = read(F.chats);
+    const chat = chats.find(c => c.id === req.params.chatId);
+    
+    if (!chat) return res.status(404).json({ error: 'Чат не найдена' });
+    
+    // Только создатель канала может удалить канал
+    // Для прямых чатов - любой участник может удалить для себя
+    if (chat.type === 'channel' && chat.creator !== me) {
+        return res.status(403).json({ error: 'Только создатель может удалить канал' });
+    }
+    
+    if (chat.type === 'direct') {
+        // Для прямых чатов просто удаляем участника
+        chat.members = chat.members.filter(id => id !== me);
+        if (chat.members.length === 0) {
+            const newChats = chats.filter(c => c.id !== req.params.chatId);
+            write(F.chats, newChats);
+        } else {
+            write(F.chats, chats);
+        }
+    } else {
+        // Удаляем весь канал
+        const newChats = chats.filter(c => c.id !== req.params.chatId);
+        write(F.chats, newChats);
+        broadcast({ type: 'chat' });
+    }
+    
+    res.json({ success: true });
 });
 
 // ---------- WebSocket ----------
@@ -436,19 +784,26 @@ wss.on('connection', ws => {
             const m = JSON.parse(raw);
 
             if (m.type === 'connect') {
-                uid = Number(m.userId);
+                const sess = read(F.sessions)[m.token];
+                if (!sess) { ws.send(JSON.stringify({ type: 'auth', data: { ok: false } })); return ws.close(); }
+                uid = sess.uid;
+                ws.active = m.active !== false;
                 if (!sockets.has(uid)) sockets.set(uid, new Set());
                 sockets.get(uid).add(ws);
                 broadcast({ type: 'presence', data: { userId: uid, online: true } });
+                const u = read(F.users).find(x => x.id === uid);
+                ws.send(JSON.stringify({ type: 'wallet', data: { mars: u ? u.mars || 0 : 0 } }));
                 return;
             }
             if (!uid) return;
+            if (m.type === 'active') { ws.active = !!m.active; return; } // вкладка открыта и видна — идёт время для Mars
 
             const chats = read(F.chats);
             const chat = chats.find(c => String(c.id) === String(m.chatId));
             if (!chat || !chat.members.includes(uid)) return;
 
             if (m.type === 'message') {
+                if (chat.type === 'channel' && chat.creator !== uid) return; // в канал пишет только автор
                 const text = String(m.text || '').trim().slice(0, 4000);
                 let media;
                 if (m.media && fileOk(m.media.url)) {
@@ -478,6 +833,7 @@ wss.on('connection', ws => {
                 sendTo(chat.members, { type: 'read', data: { chatId: chat.id, userId: uid, at } });
 
             } else if (m.type === 'typing') {
+                if (chat.type === 'channel') return;
                 sendTo(chat.members, { type: 'typing', data: { chatId: chat.id, userId: uid } }, ws);
             }
         } catch (err) {
@@ -508,6 +864,20 @@ setInterval(() => wss.clients.forEach(ws => {
     ws.ping();
 }), 25000);
 
+// Mars за время: раз в минуту каждому, у кого приложение открыто и видно (несколько вкладок считаются за одну)
+setInterval(() => {
+    const ids = new Set();
+    sockets.forEach((set, id) => { if ([...set].some(w => w.active)) ids.add(id); });
+    if (!ids.size) return;
+    const users = read(F.users);
+    users.forEach(u => {
+        if (!ids.has(u.id)) return;
+        u.mars = (u.mars || 0) + MARS_PER_MIN;
+        sendTo([u.id], { type: 'wallet', data: { mars: u.mars } });
+    });
+    write(F.users, users);
+}, 60000);
+
 process.on('uncaughtException', e => console.error('Необработанная ошибка:', e));
 process.on('unhandledRejection', e => console.error('Необработанный промис:', e));
 
@@ -532,8 +902,12 @@ async function init() {
         });
     }
     // Чего нет в базе (первый запуск) — берём из локальных файлов, иначе пустой список
-    for (const k of ['users', 'messages', 'chats']) {
-        if (mem[k] === undefined) { mem[k] = JSON.stringify(loadFile(F[k])); if (pool) dirty.add(k); }
+    for (const k of ['users', 'messages', 'chats', 'gifts', 'sessions']) {
+        if (mem[k] === undefined) {
+            const d = loadFile(F[k]);
+            mem[k] = JSON.stringify(k === 'sessions' && Array.isArray(d) ? {} : d); // сессии — объект {токен: …}
+            if (pool) dirty.add(k);
+        }
     }
     if (pool) {
         if (!hasMeta) await pool.query("insert into kv (key, value) values ('meta', $1::jsonb) on conflict (key) do nothing", [JSON.stringify(meta)]);
@@ -563,5 +937,5 @@ function keepAlive() {
 
 const PORT = process.env.PORT || 3000;
 init()
-    .then(() => server.listen(PORT, () => { console.log(`🚀 OVKGRAMM запущен: http://localhost:${PORT}`); keepAlive(); }))
+    .then(() => server.listen(PORT, () => { console.log(`🚀 SAIMONGRAM запущен: http://localhost:${PORT}`); keepAlive(); }))
     .catch(e => { console.error('Не удалось запустить сервер:', e); process.exit(1); }); // без данных не стартуем, чтобы не затереть базу пустым состоянием
