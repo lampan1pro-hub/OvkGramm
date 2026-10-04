@@ -57,7 +57,9 @@ input,textarea{font:inherit;color:inherit}
 .av i{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;background:var(--on);border:2px solid #fff}
 .im{flex:1;min-width:0}
 .r1,.lm{display:flex;justify-content:space-between;gap:8px}
-.nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nm{display:flex;align-items:center;gap:4px;min-width:0;font-weight:600}
+.nm .nt{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.vb{width:1.05em;height:1.05em;flex-shrink:0;vertical-align:-.18em}
 .tm{font-size:12px;color:var(--t2);flex-shrink:0}
 .lm{color:var(--t2);font-size:14px}
 .lm span:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -115,6 +117,12 @@ input,textarea{font:inherit;color:inherit}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="vb" viewBox="0 0 24 24">
+    <path id="vbp" fill="#19b4ff"/>
+    <path d="M7.6 12.4l3 3 5.8-6.4" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+</svg>
 
 <div id="auth">
   <form class="card" id="authForm">
@@ -165,11 +173,22 @@ input,textarea{font:inherit;color:inherit}
 
 <script>
 const $ = s => document.querySelector(s);
+// Контур значка: окружность с 16 волнами
+(() => {
+  let d = '';
+  for (let i = 0; i <= 320; i++) {
+    const t = i / 320 * 2 * Math.PI, r = 11.1 + .9 * Math.cos(16 * t);
+    d += (i ? 'L' : 'M') + (12 + r * Math.cos(t)).toFixed(2) + ' ' + (12 + r * Math.sin(t)).toFixed(2);
+  }
+  document.getElementById('vbp').setAttribute('d', d + 'Z');
+})();
+const BADGE = '<svg class="vb" role="img" aria-label="Подтверждённый аккаунт"><use href="#vb"/></svg>';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let me = null, ws = null, cur = null, query = '', found = [], opened = false;
 let chats = new Map(), msgs = new Map(), typing = new Map(), pend = null;
 const msgsEl = $('#msgs');
 
+const nmH = (name, v, extra = '') => `<span class="nm"><span class="nt">${esc(name)}${extra}</span>${v ? BADGE : ''}</span>`;
 const api = async (url, method = 'GET', body) => {
   const r = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: body && JSON.stringify(body) });
   const d = await r.json().catch(() => ({}));
@@ -187,6 +206,7 @@ const av = (name, seed, cls = '', on = false, img = '') =>
   `<div class="av ${cls}" style="background:hsl(${hue(seed)} 50% 48%)">${img ? `<img src="${esc(img)}" alt="">` : esc((name || '?')[0].toUpperCase())}${on ? '<i></i>' : ''}</div>`;
 const uav = (u, cls = '', dot = false) => av(u.username, u.id, cls, dot && u.online, u.avatar);
 const cav = (c, cls = '') => c.type === 'group' ? av(c.name, c.id, cls, false, c.avatar) : c.peer ? uav(c.peer, cls, true) : av('?', c.id, cls);
+const titleH = c => nmH(title(c), c.type === 'direct' && c.peer && c.peer.verified);
 const title = c => c.type === 'group' ? c.name : (c.peer ? c.peer.username : 'Удалённый аккаунт');
 
 /* ---------- Файлы ---------- */
@@ -430,11 +450,11 @@ function renderList() {
     const n = c.unread || 0;
     const t = c.last ? (c.last.senderId === me.id ? tick(c, c.last.timestamp) : '') + lt(c.last.timestamp) : '';
     return `<div class="it ${c.id === cur ? 'on' : ''}" data-c="${esc(c.id)}">${cav(c)}
-<div class="im"><div class="r1"><span class="nm">${esc(title(c))}</span><span class="tm">${t}</span></div>
+<div class="im"><div class="r1">${titleH(c)}<span class="tm">${t}</span></div>
 <div class="lm"><span>${esc(preview(c))}</span>${n ? `<span class="bd">${n}</span>` : ''}</div></div></div>`;
   }).join('');
   const peopleHtml = people.length ? '<div class="sec">Люди</div>' + people.map(u =>
-    `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im"><div class="nm">${esc(u.username)}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
+    `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
 
   $('#list').innerHTML = chatsHtml + peopleHtml ||
     `<div class="sec">${q ? 'Ничего не найдено' : 'Чатов пока нет. Найдите человека по имени или @юзернейму.'}</div>`;
@@ -493,7 +513,7 @@ function renderHead() {
   const t = typing.has(cur), on = c.peer && c.peer.online;
   const sub = t ? 'печатает…' : c.type === 'group' ? c.members.length + ' участн.' : (on ? 'в сети' : 'не в сети');
   $('#hd').innerHTML = cav(c, 's') +
-    `<div class="im"><div class="nm">${esc(title(c))}</div><small class="${t || on ? 'ty' : ''}">${sub}</small></div>`;
+    `<div class="im">${titleH(c)}<small class="${t || on ? 'ty' : ''}">${sub}</small></div>`;
 }
 $('#hd').onclick = () => {
   const c = chats.get(cur);
@@ -522,7 +542,7 @@ function msgHtml(c, l, i) {
   let who = '';
   if (c.type === 'group' && !mine && (!prev || prev.senderId !== m.senderId)) {
     const u = c.members.find(x => x.id === m.senderId);
-    who = `<b>${esc(u ? u.username : '?')}</b>`;
+    who = `<b>${esc(u ? u.username : '?')}${u && u.verified ? BADGE : ''}</b>`;
   }
   return h + `<div class="m ${mine ? 'me' : ''} ${m.media ? 'mm' : ''}">${who}${m.media ? mediaHtml(m.media) : ''}${m.text ? `<span class="tx">${esc(m.text)}</span>` : ''}<time>${hm(m.timestamp)}${mine ? tick(c, m.timestamp) : ''}</time></div>`;
 }
@@ -628,7 +648,7 @@ function picker(box, exclude) {
   const find = async () => {
     try {
       const r = (await api(`/api/users/search?q=${encodeURIComponent(input.value.replace(/^@/, ''))}&userId=${me.id}`)).filter(u => !exclude.has(u.id));
-      list.innerHTML = r.map(u => `<label class="it" style="padding:6px 0"><input type="checkbox" data-u="${u.id}" ${sel.has(u.id) ? 'checked' : ''}>${uav(u, 's')}<div class="im"><div class="nm">${esc(u.username)}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></label>`).join('')
+      list.innerHTML = r.map(u => `<label class="it" style="padding:6px 0"><input type="checkbox" data-u="${u.id}" ${sel.has(u.id) ? 'checked' : ''}>${uav(u, 's')}<div class="im">${nmH(u.username, u.verified)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></label>`).join('')
         || '<div class="sec" style="padding-left:0">Никого не нашли</div>';
     } catch {}
   };
@@ -646,7 +666,8 @@ function picker(box, exclude) {
 $('#meBtn').onclick = myProfile;
 function myProfile() {
   modal(`<div style="text-align:center"><div id="pav">${uav(me, 'l')}</div>
-<button class="lnk" id="pph">Сменить фото</button><button class="lnk" id="prm" ${me.avatar ? '' : 'hidden'}>Убрать</button></div>
+<button class="lnk" id="pph">Сменить фото</button><button class="lnk" id="prm" ${me.avatar ? '' : 'hidden'}>Убрать</button>
+${me.verified ? `<div style="font-weight:600;margin-top:2px">${esc(me.username)}${BADGE}</div>` : ''}</div>
 <form id="pf" style="margin-top:12px">
 <div class="f"><label>Имя</label><input id="pn" value="${esc(me.username)}" maxlength="40"></div>
 <div class="f"><label>Юзернейм</label><input id="ph" value="${esc(me.handle)}" maxlength="21" autocapitalize="off" autocomplete="off"></div>
@@ -680,7 +701,7 @@ function myProfile() {
 
 function userProfile(u) {
   modal(`<div style="text-align:center">${uav(u, 'l', true)}
-<h2 style="margin-top:12px">${esc(u.username)}</h2>
+<h2 style="margin-top:12px">${esc(u.username)}${u.verified ? BADGE : ''}</h2>
 <div style="color:var(--p)">@${esc(u.handle)}</div>
 <div style="color:var(--t2);font-size:13px">${u.online ? 'в сети' : 'не в сети'}</div>
 ${u.bio ? `<p style="margin-top:12px">${esc(u.bio)}</p>` : ''}</div>
@@ -707,7 +728,7 @@ function groupInfo(id) {
 <div class="sec" style="padding-left:0;margin-top:10px">Участники: ${c.members.length}</div>
 <button type="button" class="btn g" id="gadd" style="margin:4px 0 6px">＋ Добавить участников</button>
 <div style="max-height:220px;overflow:auto">${c.members.map(u =>
-  `<div class="it" data-p="${u.id}" style="padding-left:0;padding-right:0">${uav(u, 's', true)}<div class="im"><div class="nm">${esc(u.username)}${u.id === me.id ? ' (вы)' : ''}</div><div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
+  `<div class="it" data-p="${u.id}" style="padding-left:0;padding-right:0">${uav(u, 's', true)}<div class="im">${nmH(u.username, u.verified, u.id === me.id ? ' (вы)' : '')}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('')}</div>
 <div class="row"><button type="button" class="btn g" data-x>Закрыть</button></div>`);
 
   const patch = async body => {
