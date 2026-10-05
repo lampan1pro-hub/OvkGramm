@@ -235,7 +235,8 @@ const pub = u => ({
     ...((u.handles || [u.handle]).length > 1 ? { others: u.handles.filter(h => h !== u.handle) } : {}),
     avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc })
 });
-const self = u => ({ ...pub(u), email: u.email, ...walletOf(u), ...(u.uListing && { uListing: u.uListing }) });
+const self = u => ({ ...pub(u), email: u.email, ...walletOf(u),
+    ...(u.uListings && u.uListings.length ? { uListing: u.uListings.find(l => l.handle === u.handle) || u.uListings[0] } : {}) });
 
 function sendTo(ids, payload, exceptWs) {
     const json = JSON.stringify(payload);
@@ -673,12 +674,13 @@ app.get('/api/usernames', (req, res) => {
 // Выставить конкретный @handle на продажу
 app.post('/api/usernames/list', async (req, res) => {
     const me = req.uid, price = Math.floor(Number(req.body.price));
-    const handle = String(req.body.handle || '').trim().replace(/^@/, '').toLowerCase();
-    if (!Number.isFinite(price) || price < 1 || price > MAX_UNAME_PRICE)
-        return res.status(400).json({ error: `Цена — от 1 до ${MAX_UNAME_PRICE} Mars` });
     const users = read(F.users), u = users.find(x => x.id === me);
     if (!u) return res.status(401).json({ error: 'Войдите в аккаунт' });
     syncHandles(u);
+    // handle не указан — продаём активный юзернейм
+    const handle = String(req.body.handle || u.handle).trim().replace(/^@/, '').toLowerCase();
+    if (!Number.isFinite(price) || price < 1 || price > MAX_UNAME_PRICE)
+        return res.status(400).json({ error: `Цена — от 1 до ${MAX_UNAME_PRICE} Mars` });
     if (!u.handles.includes(handle))
         return res.status(400).json({ error: 'Этот юзернейм вам не принадлежит' });
     u.uListings = u.uListings || [];
@@ -687,14 +689,15 @@ app.post('/api/usernames/list', async (req, res) => {
     else { u.uListings.push({ handle, price, at: new Date().toISOString() }); }
     write(F.users, users);
     await persist();
-    res.json({ success: true, listings: u.uListings, handles: u.handles });
+    res.json({ success: true, listing: u.uListings.find(l => l.handle === handle), listings: u.uListings, handles: u.handles });
 });
 
 // Снять конкретный handle с продажи
 app.post('/api/usernames/unlist', async (req, res) => {
-    const handle = String(req.body.handle || '').trim().replace(/^@/, '').toLowerCase();
     const users = read(F.users), u = users.find(x => x.id === req.uid);
     if (!u) return res.status(401).json({ error: 'Не найден' });
+    syncHandles(u);
+    const handle = String(req.body.handle || u.handle).trim().replace(/^@/, '').toLowerCase();
     u.uListings = (u.uListings || []).filter(l => l.handle !== handle);
     write(F.users, users);
     await persist();
