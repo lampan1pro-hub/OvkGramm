@@ -352,6 +352,9 @@ button,input,textarea{transition:background .15s,border-color .15s,box-shadow .1
 .cms{width:44px;height:44px;border-radius:50%;background:var(--p);color:#fff;font-size:18px;flex-shrink:0}
 .acc{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;margin-left:4px;font-size:12px;line-height:1;flex-shrink:0;vertical-align:middle;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
 h2 .acc,.cmn .acc{margin-left:6px}
+a.hndl{color:var(--p);font-weight:600;cursor:pointer;text-decoration:none}
+a.hndl:hover{text-decoration:underline}
+.m.me a.hndl{color:inherit;text-decoration:underline}
 h2 .acc{width:26px;height:26px;font-size:16px}
 #acctip{position:fixed;z-index:80;padding:7px 14px;border-radius:18px;background:rgba(60,60,64,.92);color:#fff;font-size:14px;font-weight:600;pointer-events:none;animation:popIn .15s ease-out;white-space:nowrap}
 .gc .gworn{position:absolute;top:6px;left:8px;font-size:13px}
@@ -1145,8 +1148,16 @@ function bubbleHtml(c, l, i) {
   if (c.type === 'channel' && c.open && !mine && m.sn && (!prev || prev.senderId !== m.senderId)) who = `<b>${esc(m.sn)}${m.sv ? BADGE : ''}${accH(m.sacc)}</b>`;
   const st = m.pending ? '<span class="tk">🕓</span>' : mine && !ch ? tick(c, m.timestamp) : '';
   const act = mine && !m.pending ? `<button class="mb" data-m="${esc(m.id)}" aria-label="Действия с сообщением">⋯</button>` : '';
-  return `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''} ${m.pending ? 'pending' : ''}" data-id="${esc(m.id)}"${m.cid ? ` data-cid="${esc(m.cid)}"` : ''}>${who}${m.gift ? giftBubble(m.gift, mine, m.text) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text && !m.gift ? `<span class="tx">${esc(m.text)}</span>` : ''}${btnsHtml(m)}${rxHtml(m)}<time>${ch && m.views != null ? `<span class="vw" data-vw>👁 ${fmtViews(m.views)}</span>` : ''}${act}${m.edited ? 'изм. ' : ''}${hm(m.timestamp)}${st}</time>${ch ? cmRow(m) : ''}</div>`;
+  return `<div class="m ${mine && !ch ? 'me' : ''} ${m.media || m.gift ? 'mm' : ''} ${ch ? 'ch' : ''} ${m.pending ? 'pending' : ''}" data-id="${esc(m.id)}"${m.cid ? ` data-cid="${esc(m.cid)}"` : ''}>${who}${m.gift ? giftBubble(m.gift, mine, m.text) : ''}${m.media ? mediaHtml(m.media) : ''}${m.text && !m.gift ? `<span class="tx">${linkify(m.text)}</span>` : ''}${btnsHtml(m)}${rxHtml(m)}<time>${ch && m.views != null ? `<span class="vw" data-vw>👁 ${fmtViews(m.views)}</span>` : ''}${act}${m.edited ? 'изм. ' : ''}${hm(m.timestamp)}${st}</time>${ch ? cmRow(m) : ''}</div>`;
 }
+// @юзернеймы в тексте — кликабельные (ищут и «второстепенные» handles)
+const HNDL_RE = /(^|[^a-zA-Z0-9_])@([a-z0-9_]{3,20})/g;
+const linkify = t => esc(t).replace(HNDL_RE, (m, p, h) => `${p}<a class="hndl" data-h="${h}">@${h}</a>`);
+async function openByHandle(h) {
+  try { userProfile(await api('/api/users/by-handle?h=' + encodeURIComponent(h))); }
+  catch (x) { toast(x.message); }
+}
+
 const dayHtml = (l, i) => !l[i - 1] || new Date(l[i - 1].timestamp).toDateString() !== new Date(l[i].timestamp).toDateString()
   ? `<div class="day">${dl(l[i].timestamp)}</div>` : '';
 const msgHtml = (c, l, i) => dayHtml(l, i) + bubbleHtml(c, l, i);
@@ -1171,6 +1182,8 @@ function rerender() {
   if (!was) msgsEl.scrollTop = top;
 }
 msgsEl.onclick = async e => {
+  const hl = e.target.closest('a.hndl');
+  if (hl) { e.preventDefault(); openByHandle(hl.dataset.h); return; }
   const bb = e.target.closest('.bbtn');
   if (bb) {
     const row = bb.closest('.m');
@@ -1331,7 +1344,7 @@ function cmAdd(c) {
   box.querySelector('.cmempty')?.remove();
   const stick = box.scrollHeight - box.scrollTop - box.clientHeight < 80 || c.userId === me.id;
   const ch = chats.get(cmOpen.chatId), can = c.userId === me.id || (ch && ch.creator === me.id);
-  box.insertAdjacentHTML('beforeend', `<div class="cmi" data-c="${esc(c.id)}">${uav(c.u, 's')}<div class="cmb"><div class="cmn">${nmH(c.u.username, c.u.verified, '', c.u.acc)}<time>${cmTime(c.at)}</time></div><div class="cmx">${esc(c.text)}</div></div>${can ? '<button type="button" class="cmd" title="Удалить">🗑</button>' : ''}</div>`);
+  box.insertAdjacentHTML('beforeend', `<div class="cmi" data-c="${esc(c.id)}">${uav(c.u, 's')}<div class="cmb"><div class="cmn">${nmH(c.u.username, c.u.verified, '', c.u.acc)}<time>${cmTime(c.at)}</time></div><div class="cmx">${linkify(c.text)}</div></div>${can ? '<button type="button" class="cmd" title="Удалить">🗑</button>' : ''}</div>`);
   if (stick) box.scrollTop = box.scrollHeight;
 }
 async function openComments(postId) {
@@ -1353,6 +1366,8 @@ async function openComments(postId) {
     box.scrollTop = box.scrollHeight;
   } catch (x) { box.innerHTML = `<div class="err">${esc(x.message)}</div>`; }
   box.onclick = async e => {
+    const hl = e.target.closest('a.hndl');
+    if (hl) { e.preventDefault(); openByHandle(hl.dataset.h); return; }
     const b = e.target.closest('.cmd'); if (!b || !confirm('Удалить комментарий?')) return;
     try { await api(`/api/messages/${encodeURIComponent(postId)}/comments/${encodeURIComponent(b.closest('.cmi').dataset.c)}`, 'DELETE'); }
     catch (x) { $('#cme').textContent = x.message; }
