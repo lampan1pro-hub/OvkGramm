@@ -599,7 +599,9 @@ const av = (name, seed, cls = '', on = false, img = '') =>
   `<div class="av ${cls}" style="background:linear-gradient(180deg,hsl(${hue(seed)} 65% 64%),hsl(${hue(seed)} 60% 48%))">${img ? `<img src="${esc(img)}" alt="">` : esc((name || '?')[0].toUpperCase())}${on ? '<i></i>' : ''}</div>`;
 const uav = (u, cls = '', dot = false) => av(u.username, u.id, cls, dot && u.online, u.avatar);
 const cav = (c, cls = '') => c.type !== 'direct' ? av(c.name, c.id, cls, false, c.avatar) : c.peer ? uav(c.peer, cls, true) : av('?', c.id, cls);
-const titleH = c => nmH((c.type === 'channel' ? '📢 ' : '') + title(c), c.type === 'direct' && c.peer && c.peer.verified, '', c.type === 'direct' && c.peer ? c.peer.acc : null);
+const titleH = c => nmH((c.type === 'channel' ? '📢 ' : '') + title(c),
+    c.type === 'direct' ? c.peer && c.peer.verified : !!c.verified,   // галочка: у людей из VERIFIED, у каналов с 5000+
+    '', c.type === 'direct' && c.peer ? c.peer.acc : null);
 const title = c => c.type !== 'direct' ? c.name : (c.peer ? c.peer.username : 'Удалённый аккаунт');
 
 /* ---------- Файлы ---------- */
@@ -995,9 +997,10 @@ function renderListNow() {
   if (q) a = a.filter(c => title(c).toLowerCase().includes(q) || (c.peer && c.peer.handle.includes(q)) || (c.handle && c.handle.includes(q)));
   const have = new Set(a.filter(c => c.peer).map(c => c.peer.id));
   const people = q ? found.filter(u => !have.has(u.id)) : [];
-  const chans = q ? foundCh.filter(c => !chats.has(c.id)) : [];
-  const chansHtml = chans.length ? '<div class="sec">Каналы</div>' + chans.map(c =>
-    `<div class="it" data-ch="${esc(c.id)}">${av(c.name, c.id, '', false, c.avatar)}<div class="im">${nmH('📢 ' + c.name, false)}<div class="lm"><span>${subs(c.subscribers)}${c.handle ? ' · @' + esc(c.handle) : ''}</span></div></div></div>`).join('') : '';
+  // без запроса — топ-3 популярных, с запросом — совпадения (оба от сервера, отсортированы по подписчикам)
+  const chans = (q ? foundCh : topChans).filter(c => !chats.has(c.id));
+  const chansHtml = (sFocus || q) && chans.length ? `<div class="sec">${q ? 'Каналы' : '🔥 Популярные каналы'}</div>` + chans.map(c =>
+    `<div class="it" data-ch="${esc(c.id)}">${av(c.name, c.id, '', false, c.avatar)}<div class="im">${nmH('📢 ' + c.name, c.verified)}<div class="lm"><span>${subs(c.subscribers)}${c.handle ? ' · @' + esc(c.handle) : ''}</span></div></div></div>`).join('') : '';
 
   const chatsHtml = a.map(c => {
     const n = c.unread || 0;
@@ -1025,12 +1028,16 @@ $('#list').onclick = e => {
   else openUser(+it.dataset.u);
 };
 // Пока в поиске ничего не введено, сразу предлагаем бота накрутки
-let sFocus = false, botUser = null;
+let sFocus = false, botUser = null, topChans = [];
 async function loadBot() {
   if (botUser) return;
   try { botUser = (await api('/api/users/search?q=nakrytka_bot')).find(u => u.bot) || null; renderList(); } catch {}
 }
-$('#q').onfocus = () => { sFocus = true; renderList(); loadBot(); };
+async function loadTopChans() {
+  if (topChans.length) return;
+  try { topChans = await api('/api/channels/search?q='); renderList(); } catch {}
+}
+$('#q').onfocus = () => { sFocus = true; renderList(); loadBot(); loadTopChans(); };
 document.addEventListener('pointerdown', e => {
   if (sFocus && !e.target.closest('#q') && !e.target.closest('#list')) { sFocus = false; renderList(); }
 });
@@ -1628,7 +1635,7 @@ function newChannel() {
 function channelPreview(ch) {
   if (!ch) return;
   modal(`<div style="text-align:center">${av(ch.name, ch.id, 'l', false, ch.avatar)}
-<h2 style="margin-top:12px">📢 ${esc(ch.name)}</h2>
+<h2 style="margin-top:12px">📢 ${esc(ch.name)}${ch.verified ? BADGE : ''}</h2>
 ${ch.handle ? `<div style="color:var(--p)">@${esc(ch.handle)}</div>` : ''}
 <div style="color:var(--t2);font-size:13px">${subs(ch.subscribers)}</div>
 ${ch.description ? `<p style="margin-top:12px">${esc(ch.description)}</p>` : ''}</div>
@@ -1649,7 +1656,7 @@ function channelInfo(id) {
   if (!c) return;
   if (c.creator !== me.id) { // подписчик: описание и отписка
     modal(`<div style="text-align:center">${cav(c, 'l')}
-<h2 style="margin-top:12px">📢 ${esc(c.name)}</h2>
+<h2 style="margin-top:12px">📢 ${esc(c.name)}${c.verified ? BADGE : ''}</h2>
 ${c.handle ? `<div style="color:var(--p)">@${esc(c.handle)}</div>` : ''}
 <div style="color:var(--t2);font-size:13px">${subs(c.subscribers)}${c.open ? ' · писать могут все' : ''}</div>
 ${c.description ? `<p style="margin-top:12px">${esc(c.description)}</p>` : ''}</div>
