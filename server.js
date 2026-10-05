@@ -142,8 +142,12 @@ app.get('/uploads/:name', async (req, res) => {
 const directId = (a, b) => `d_${Math.min(a, b)}_${Math.max(a, b)}`;
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 // Занят ли handle кем-то ещё: проверяем ВСЕ юзернеймы пользователей (основной + «а также»)
+// Юзернейм занят, если его держит живой аккаунт ИЛИ он зарезервирован у заблокированного
 const handleTaken = (users, h, exceptId) =>
-    users.some(u => u.id !== exceptId && (u.handles || [u.handle]).includes(h));
+    users.some(u => u.id !== exceptId && (
+        (u.handles || [u.handle]).includes(h) ||
+        (u.banBackup && (u.banBackup.handles || []).includes(h))
+    ));
 
 // Файлы
 const MIME = {
@@ -313,7 +317,12 @@ function shape(chat, me, users, list) {
         id: chat.id, type: chat.type, name: chat.name, avatar: chat.avatar || '',
         creator: chat.creator, createdAt: chat.createdAt, reads,
         last: outMsg(list[list.length - 1] || null, chat, () => ixOf(users)),
-        unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length
+        unread: list.filter(m => m.senderId !== me && m.timestamp > (reads[me] || '')).length,
+        pins: (chat.pins || []).map(id => list.find(m => m.id === id)).filter(Boolean)
+            .map(m => ({ id: m.id, senderId: m.senderId,
+                name: ((users.find(u => u.id === m.senderId) || {}).username) || '—',
+                text: String(m.text || '').slice(0, 90),
+                media: m.media ? m.media.kind : (m.gift ? 'gift' : '') }))
     };
     if (chat.type === 'direct') {
         const p = byId(chat.members.find(i => i !== me));
@@ -1476,6 +1485,38 @@ app.post('/api/gifts/:id/transfer', async (req, res) => {
     res.json({ success: true });
 });
 
+// ---------- Закрепление сообщений (до 5 на чат) ----------
+app.post('/api/chats/:chatId/pin', async (req, res) => {
+    const chats = read(F.chats), chat = chats.find(c => String(c.id) === req.params.chatId);
+    if (!chat || !chat.members.includes(req.uid)) return res.status(403).json({ error: 'Нет доступа' });
+    const mid = String(req.body.messageId || '');
+    if (req.body.on) {
+        if (!read(F.messages).some(m => m.id === mid && m.chatId === chat.id))
+            return res.status(404).json({ error: 'Сообщение не найдено' });
+        chat.pins = [mid, ...(chat.pins || []).filter(x => x !== mid)].slice(0, 5);
+    } else {
+        chat.pins = (chat.pins || []).filter(x => x !== mid);
+    }
+    write(F.chats, chats);
+    sendTo(chat.members, { type: 'chat' }); // все подтянут обновлённые pins
+    await persist();
+    res.json({ success: true });
+});
+
+// ---------- Поиск по сообщениям чата ----------
+app.get('/api/chats/:chatId/search', (req, res) => {
+    const chat = read(F.chats).find(c => String(c.id) === req.params.chatId);
+    if (!chat || !chat.members.includes(req.uid)) return res.status(403).json({ error: 'Нет доступа' });
+    const q = String(req.query.q || '').trim().toLowerCase();
+    if (!q) return res.json([]);
+    const clr = (chat.cleared || {})[req.uid] || '';
+    res.json(read(F.messages)
+        .filter(m => m.chatId === chat.id && m.timestamp > clr && String(m.text || '').toLowerCase().includes(q))
+        .slice(-50).reverse()
+        .map(m => ({ id: m.id, senderId: m.senderId, text: String(m.text || '').slice(0, 140), ts: m.timestamp,
+            media: m.media ? m.media.kind : (m.gift ? 'gift' : '') })));
+});
+
 app.get('/api/messages/:chatId', (req, res) => {
     const me = Number(req.query.userId);
     const chat = read(F.chats).find(c => String(c.id) === req.params.chatId);
@@ -1643,6 +1684,9 @@ app.post('/api/admin/users/:id/block', adminOnly, async (req, res) => {
     const users = read(F.users), u = users.find(x => x.id === id);
     if (!u || u.bot || u.fake) return res.status(404).json({ error: 'Пользователь не найден' });
     if (u.handle === ADMIN_HANDLE) return res.status(400).json({ error: 'Нельзя заблокировать администратора' });
+    syncHandles(u);
+    // резервная копия для разблокировки; юзернеймы остаются занятыми
+    u.banBackup = { username: u.username, handle: u.handle, handles: [...u.handles], bio: u.bio || '', avatar: u.avatar || '', acc: u.acc || null, contactNames: u.contactNames || {} };
     u.banned = true;
     u.username = 'Аккаунт заблокирован';
     u.handle = '';
@@ -1661,6 +1705,40 @@ app.post('/api/admin/users/:id/block', adminOnly, async (req, res) => {
     broadcast({ type: 'chat' });
     await persist();
     res.json({ success: true });
+});
+
+// Разблокировка: возвращаем имя, юзернеймы, био и фото из резервной копии.
+// Пока аккаунт заблокирован, его юзернеймы занять нельзя (см. handleTaken).
+app.post('/api/admin/users/:id/unblock', adminOnly, async (req, res) => {
+    const id = Number(req.params.id);
+    const users = read(F.users), u = users.find(x => x.id === id);
+    if (!u || !u.banned) return res.status(404).json({ error: 'Заблокированный пользователь не найден' });
+    const b = u.banBackup;
+    if (b) {
+        u.username = b.username; u.handle = b.handle; u.handles = b.handles;
+        u.bio = b.bio; u.avatar = b.avatar;
+        if (b.acc) u.acc = b.acc;
+        if (b.contactNames) u.contactNames = b.contactNames;
+    } else {
+        // аккаунт заблокирован до появления резервной копии — даём временный юзернейм
+        u.username = 'Пользователь'; u.handle = 'user' + String(u.id).slice(-6); u.handles = [u.handle];
+    }
+    u.uListings = [];
+    delete u.banned;
+    delete u.banBackup;
+    write(F.users, users);
+    broadcast({ type: 'chat' });
+    await persist();
+    res.json({ success: true });
+});
+
+// Список заблокированных с их зарезервированными юзернеймами (видно только админу)
+app.get('/api/admin/banned', adminOnly, (req, res) => {
+    res.json(read(F.users).filter(u => u.banned).map(u => ({
+        id: u.id,
+        name: (u.banBackup && u.banBackup.username) || '—',
+        reserved: ((u.banBackup && u.banBackup.handles) || []).map(h => '@' + h)
+    })));
 });
 
 // ---------- WebSocket ----------
@@ -1713,9 +1791,26 @@ wss.on('connection', ws => {
                 }
                 if (!text && !media) return;
 
+                // Ответ на сообщение: сохраняем снапшот оригинала (переживёт его удаление)
+                let reply;
+                if (m.reply && typeof m.reply === 'object') {
+                    const orig = read(F.messages).find(x => x.id === String(m.reply.id || '') && x.chatId === chat.id);
+                    if (orig) {
+                        const u = read(F.users).find(x => x.id === orig.senderId);
+                        reply = { id: orig.id, name: u ? u.username : 'Удалённый аккаунт', ...(u ? { handle: u.handle } : {}),
+                            text: String(orig.text || '').slice(0, 120), mk: orig.media ? orig.media.kind : (orig.gift ? 'gift' : '') };
+                    }
+                }
+                // Пересылка: помечаем, от кого оригинал
+                let fwd;
+                if (m.fwd && typeof m.fwd === 'object') {
+                    const u = read(F.users).find(x => x.id === Number(m.fwd.from));
+                    if (u) fwd = { from: u.id, name: u.username, handle: u.handle };
+                }
+
                 const msg = {
                     id: crypto.randomUUID(), chatId: chat.id, senderId: uid, text,
-                    ...(media && { media }), timestamp: new Date().toISOString()
+                    ...(media && { media }), ...(reply && { reply }), ...(fwd && { fwd }), timestamp: new Date().toISOString()
                 };
                 if (chat.type === 'channel' && !chat.open) { msg.viewers = [uid]; msg.fv = rollFv(fakeInChannel(chat, read(F.users))); }
                 const msgs = read(F.messages);
