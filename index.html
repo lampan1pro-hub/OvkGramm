@@ -477,6 +477,22 @@ html[data-theme=dark] .un-handle{color:#e8f0fb}
 @media(max-width:768px){
   #rdonly{margin:6px 8px calc(6px + env(safe-area-inset-bottom))}
 }
+
+/* ===== Шапка: название не перекрывает кнопки ===== */
+.sh h1{flex:0 1 auto;min-width:0}              /* название сжимается первым */
+.sh .ib,.sh #meBtn{flex-shrink:0}              /* кнопки и профиль — никогда не сжимаются */
+.sh{gap:4px}
+@media(max-width:768px){
+  .sh{padding:8px 8px 6px}
+  .sh h1{font-size:17px;max-width:38vw}        /* SAIMONGRAM целиком на узком экране */
+  #meBtn span{display:none}                    /* на телефоне — только аватарка, как в ТГ */
+  #meBtn{padding:2px}
+  #meBtn .av{width:34px;height:34px}
+  .sh .ib{width:36px;height:36px;font-size:18px}
+}
+@media(max-width:400px){
+  .sh h1{font-size:15px;max-width:30vw}
+}
 </style>
 </head>
 <body>
