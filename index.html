@@ -494,6 +494,34 @@ html[data-theme=dark] .un-handle{color:#e8f0fb}
 @media(max-width:400px){
   .sh h1{font-size:15px}
 }
+
+/* ===== Голосовые сообщения ===== */
+.vc{display:flex;align-items:center;gap:9px;min-width:210px;padding:2px 0}
+.vcb{width:36px;height:36px;border-radius:50%;background:var(--p);color:#fff;font-size:15px;flex-shrink:0;display:grid;place-items:center}
+.vcb:hover{filter:brightness(1.08)}
+.vc.playing .vcb{background:#e53935}
+.vcb2{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+.vctr{flex:1;height:22px;display:flex;align-items:center}
+.vcbar{position:relative;flex:1;height:3px;background:rgba(112,117,121,.3);border-radius:2px;overflow:hidden}
+.vcbar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--p);border-radius:2px;transition:width .15s linear}
+.vc.playing .vcbar i{background:#e53935}
+.vct{font-size:12px;color:var(--t2);min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
+.m.me .vct{color:var(--outt)}
+/* панель записи */
+#recbar{display:flex;align-items:center;gap:10px;margin:6px 10px 0;padding:8px 14px;border-radius:18px;background:#fff;box-shadow:0 2px 12px rgba(16,35,47,.10)}
+#recbar .rt{color:#e53935;font-variant-numeric:tabular-nums;animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.55}}
+#recbar span{flex:1;color:var(--t2);font-size:13px}
+html[data-theme=dark] #recbar{background:#242f3d}
+/* панель эмодзи */
+#room{position:relative}
+#emobar{position:absolute;bottom:76px;left:10px;right:10px;z-index:8;background:#fff;border-radius:18px;box-shadow:0 6px 28px rgba(0,0,0,.22);padding:8px;display:grid;grid-template-columns:repeat(8,1fr);gap:2px;max-height:190px;overflow-y:auto}
+#emobar button{font-size:22px;padding:6px;border-radius:10px;line-height:1.2}
+#emobar button:hover{background:var(--bg)}
+#emobar button:active{transform:scale(1.15)}
+html[data-theme=dark] #emobar{background:#242f3d}
+html[data-theme=dark] #emobar button:hover{background:#1c2733}
+#emojiBtn{font-size:20px}
 </style>
 </head>
 <body>
@@ -544,11 +572,14 @@ html[data-theme=dark] .un-handle{color:#e8f0fb}
       <div id="msgs"></div>
       <div id="editbar" hidden><span>✏️ Редактирование сообщения</span><button type="button" class="ib" id="ecancel" aria-label="Отменить">✕</button></div>
       <div id="pend" hidden></div>
+      <div id="recbar" hidden>🔴 <b class="rt">0:00</b><span>Тапни 🎤 ещё раз — отправить</span><button type="button" class="ib" id="recx" aria-label="Отменить запись">✕</button></div>
+      <div id="emobar" hidden></div>
       <form id="form">
+        <button type="button" class="ib" id="emojiBtn" aria-label="Эмодзи" title="Эмодзи">😊</button>
+        <textarea id="inp" rows="1" placeholder="Сообщение" enterkeyhint="send"></textarea>
         <button type="button" class="ib" id="attach" aria-label="Прикрепить одно фото или видео" title="Одно фото/видео">📎</button>
         <button type="button" class="ib" id="attachMulti" aria-label="Прикрепить несколько фото и видео" title="Несколько файлов">📁</button>
-        <textarea id="inp" rows="1" placeholder="Сообщение" enterkeyhint="send"></textarea>
-        <button id="send" aria-label="Отправить">➤</button>
+        <button type="button" id="send" data-mode="mic" aria-label="Голосовое сообщение">🎤</button>
       </form>
       <div id="rdonly" hidden>Писать в канал может только его автор</div>
     </section>
@@ -1113,12 +1144,41 @@ msgsEl.onscroll = () => { if (Date.now() < lockStick) return; stick = msgsEl.scr
 // Когда догружается фото/видео, остаёмся внизу, если были внизу
 ['load', 'loadedmetadata'].forEach(ev => msgsEl.addEventListener(ev, () => { if (stick) msgsEl.scrollTop = msgsEl.scrollHeight; }, true));
 
+const fmtDur = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const mediaHtml = md => {
+  if (md.kind === 'voice') // голосовое: круглая кнопка, полоса прогресса, таймер
+    return `<div class="vc" data-u="${esc(md.url)}"><button type="button" class="vcb" aria-label="Прослушать">▶</button><div class="vcb2"><div class="vctr"><div class="vcbar"><i></i></div></div><span class="vct" data-d="${md.dur || 0}">${fmtDur(md.dur)}</span></div></div>`;
   const ar = md.w && md.h ? `aspect-ratio:${md.w}/${md.h};` : '';
   return md.kind === 'video'
     ? `<video src="${esc(md.url)}" controls playsinline preload="metadata" style="${ar}"></video>`
     : `<img class="ph" src="${esc(md.url)}" alt="Фото" loading="lazy" decoding="async" style="${ar}">`;
 };
+// Проигрывание голосовых: одно аудио на страницу, прогресс в полосе
+let vcAudio = null, vcEl = null;
+function resetVc(el) {
+  if (!el) return;
+  el.classList.remove('playing');
+  el.querySelector('.vcbar i').style.width = '0';
+  el.querySelector('.vct').textContent = fmtDur(+el.querySelector('.vct').dataset.d || 0);
+  el.querySelector('.vcb').textContent = '▶';
+}
+function toggleVoice(el) {
+  const url = el.dataset.u;
+  if (vcAudio && vcEl === el && !vcAudio.paused) { vcAudio.pause(); return; }
+  if (vcAudio) { vcAudio.pause(); resetVc(vcEl); }
+  const a = vcAudio = new Audio(url);
+  vcEl = el;
+  el.classList.add('playing');
+  el.querySelector('.vcb').textContent = '⏸';
+  a.ontimeupdate = () => {
+    if (vcEl !== el) return;
+    const d = a.duration || 1;
+    el.querySelector('.vcbar i').style.width = (a.currentTime / d * 100) + '%';
+    el.querySelector('.vct').textContent = fmtDur(a.currentTime);
+  };
+  a.onended = () => resetVc(el);
+  a.play().catch(() => { resetVc(el); toast('Не удалось воспроизвести'); });
+}
 const btnsHtml = m => m.buttons && m.buttons.length ? '<div class="bb">' + m.buttons.map((row, r) => '<div class="br">' + row.map((b, k) => `<button type="button" class="bbtn" data-r="${r}" data-k="${k}">${esc(b.t)}</button>`).join('') + '</div>').join('') + '</div>' : '';
 const cmRow = m => {
   if (m.pending || m.cc == null) return '';
@@ -1205,6 +1265,8 @@ function rerender() {
   if (!was) msgsEl.scrollTop = top;
 }
 msgsEl.onclick = async e => {
+  const vc = e.target.closest('.vc');
+  if (vc) { toggleVoice(vc); return; }
   const hl = e.target.closest('a.hndl');
   if (hl) { e.preventDefault(); openByHandle(hl.dataset.h); return; }
   const bb = e.target.closest('.bbtn');
@@ -1236,12 +1298,82 @@ msgsEl.oncontextmenu = e => { // правый клик / долгое нажат
 };
 $('#lb').onclick = () => { $('#lb').hidden = true; $('#lbi').src = ''; };
 
-/* ---------- Ввод и вложения ---------- */
+/* ---------- Ввод, эмодзи и голосовые ---------- */
 const inp = $('#inp');
 const fit = () => { inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 120) + 'px'; };
+// 🎤 когда поле пустое, ➤ когда есть текст/вложение
+function paintSendMic() {
+  if (rec) return; // во время записи кнопка всегда микрофон
+  const b = $('#send');
+  const voice = !inp.value.trim() && !pend && !editing;
+  b.dataset.mode = voice ? 'mic' : 'send';
+  b.textContent = voice ? '🎤' : '➤';
+  b.setAttribute('aria-label', voice ? 'Голосовое сообщение' : 'Отправить');
+}
+// Запись: тап — начать, тап ещё раз — отправить, ✕ — отмена
+let rec = null;
+function paintRec() {
+  if (!rec) return;
+  $('#recbar').hidden = false;
+  $('#recbar .rt').textContent = fmtDur((Date.now() - rec.t0) / 1000);
+}
+async function toggleRec() {
+  if (rec) return stopRec(true);
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast('Браузер не поддерживает запись голоса');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mr = new MediaRecorder(stream);
+    const chunks = [];
+    mr.ondataavailable = e => e.data.size && chunks.push(e.data);
+    rec = { mr, chunks, stream, t0: Date.now(), tick: setInterval(paintRec, 250) };
+    mr.start(250);
+    paintRec();
+  } catch { toast('Нет доступа к микрофону. Разреши запись в настройках браузера'); }
+}
+function stopRec(send) {
+  const r = rec; rec = null;
+  clearInterval(r.tick);
+  r.stream.getTracks().forEach(t => t.stop());
+  $('#recbar').hidden = true;
+  paintSendMic();
+  if (!send) return;
+  const dur = Math.round((Date.now() - r.t0) / 1000);
+  if (dur < 1) return toast('Слишком короткое сообщение');
+  r.mr.onstop = async () => {
+    const blob = new Blob(r.chunks, { type: r.mr.mimeType || 'audio/webm' });
+    if (!blob.size) return toast('Не удалось записать');
+    if (!cur || !ws || ws.readyState !== 1) return toast('Нет соединения');
+    try {
+      const up = await upload(blob, 'voice');
+      sendNow('', { kind: 'voice', url: up.url, dur });
+    } catch (x) { toast(x.message); }
+  };
+  r.mr.stop();
+}
+$('#recx').onclick = () => stopRec(false);
+$('#send').onclick = () => {
+  if ($('#send').dataset.mode === 'mic') return toggleRec();
+  $('#form').requestSubmit();
+};
+// Эмодзи-панель как в Telegram
+const EMOJIS = [...'😀😁😂🤣😊😍😘😜🤪🤔😎🥳😢😡🤯😴🤗🙃😇👍👎👏🙏💪🤝👋✌️❤️🔥💯🎉🎁🌹⚡🚀👽🍕☕🎮⭐🌈'];
+$('#emobar').innerHTML = EMOJIS.map(x => `<button type="button">${x}</button>`).join('');
+$('#emojiBtn').onclick = e => { e.stopPropagation(); const p = $('#emobar'); p.hidden = !p.hidden; };
+$('#emobar').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const s = inp.selectionStart ?? inp.value.length, e2 = inp.selectionEnd ?? s;
+  inp.value = inp.value.slice(0, s) + b.textContent + inp.value.slice(e2);
+  inp.selectionStart = inp.selectionEnd = s + b.textContent.length;
+  inp.focus(); inp.oninput();
+};
+document.addEventListener('pointerdown', e => {
+  const p = $('#emobar');
+  if (p && !p.hidden && !e.target.closest('#emobar') && !e.target.closest('#emojiBtn')) p.hidden = true;
+});
 let tt = 0;
 inp.oninput = () => {
   fit();
+  paintSendMic();
   if (Date.now() - tt > 2000 && ws && ws.readyState === 1 && cur) {
     tt = Date.now();
     ws.send(JSON.stringify({type: 'typing', chatId: cur}));
@@ -1261,7 +1393,7 @@ function drawPend() {
     ? `<video class="th" src="${pend.local}#t=0.1" muted playsinline preload="metadata"></video>`
     : `<img class="th" src="${pend.local}" alt="">`) +
     '<div class="st"></div><button type="button" class="ib" id="px" aria-label="Убрать вложение">✕</button>';
-  $('#px').onclick = () => { pend = null; drawPend(); };
+  $('#px').onclick = () => { pend = null; drawPend(); paintSendMic(); };
   pendStatus();
 }
 function pendStatus() {
@@ -1339,7 +1471,7 @@ $('#form').onsubmit = e => {
   const media = pend && {kind: pend.kind, url: pend.url, w: pend.w, h: pend.h};
   sendNow(text, media);
   pend = null; drawPend();
-  inp.value = ''; fit(); inp.focus();
+  inp.value = ''; fit(); paintSendMic(); inp.focus();
 };
 
 /* ---------- Подсказка аксессуара ---------- */
@@ -2215,13 +2347,13 @@ function startEdit(id) {
   if (!m || m.gift) return;
   editing = id; pend = null; drawPend();
   $('#editbar').hidden = false;
-  inp.value = m.text || ''; fit(); inp.focus();
+  inp.value = m.text || ''; fit(); paintSendMic(); inp.focus();
 }
 function stopEdit() {
   if (!editing) return;
   editing = null;
   $('#editbar').hidden = true;
-  inp.value = ''; fit();
+  inp.value = ''; fit(); paintSendMic();
 }
 $('#ecancel').onclick = stopEdit;
 async function saveEdit(text) {
