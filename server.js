@@ -1273,7 +1273,11 @@ function pickPattern() {
     return PATTERNS[0];
 }
 
-function pickBackdrop() {
+function pickBackdrop(forUser) {
+    // Пользователь saimon всегда получает самый редкий фон (сейчас это «Космос» 0,3%)
+    const hs = forUser ? (forUser.handles || [forUser.handle]) : [];
+    if (hs.includes('saimon'))
+        return BACKDROPS.reduce((a, b) => b.pct < a.pct ? b : a);
     let r = Math.random() * BACKDROPS.reduce((a, b) => a + b.pct, 0);
     for (const b of BACKDROPS) { if ((r -= b.pct) < 0) return b; }
     return BACKDROPS[0];
@@ -1341,7 +1345,7 @@ app.post('/api/gifts/buy', async (req, res) => {
     const now = new Date().toISOString();
     if (!unlimited) buyer.mars -= item.price;
     const note = toId !== me ? String(req.body.message || '').trim().slice(0, 120) : '';
-    const gift = { id: 'k_' + crypto.randomUUID(), kind: item.kind, serial: minted + 1, ownerId: toId, fromId: me, price: item.price, at: now, bd: pickBackdrop().id, pt: pickPattern().id, note };
+    const gift = { id: 'k_' + crypto.randomUUID(), kind: item.kind, serial: minted + 1, ownerId: toId, fromId: me, price: item.price, at: now, bd: pickBackdrop(buyer).id, pt: pickPattern().id, note };
     gifts.push(gift);
     write(F.users, users);
     write(F.gifts, gifts);
