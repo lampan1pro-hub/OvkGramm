@@ -585,6 +585,15 @@ app.get('/api/users/search', (req, res) => {
         .slice(0, 30).map(pub));
 });
 
+// Пользователь по точному совпадению любого из своих юзернеймов (основной или «а также»)
+app.get('/api/users/by-handle', (req, res) => {
+    const h = String(req.query.h || '').trim().replace(/^@/, '').toLowerCase();
+    if (!h) return res.status(400).json({ error: 'Нет юзернейма' });
+    const u = read(F.users).find(x => !x.fake && !x.bot && (x.handles || [x.handle]).includes(h));
+    if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
+    res.json(pub(u));
+});
+
 app.get('/api/profile/:id', (req, res) => {
     const u = read(F.users).find(x => x.id === Number(req.params.id));
     if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
