@@ -232,6 +232,7 @@ const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
 
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
+    ...((u.handles || [u.handle]).length > 1 ? { others: u.handles.filter(h => h !== u.handle) } : {}),
     avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc })
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u), ...(u.uListing && { uListing: u.uListing }) });
@@ -550,7 +551,10 @@ app.post('/api/login', async (req, res) => {
     const login = String(req.body.email || '').trim().toLowerCase().replace(/^@/, '');
     const password = String(req.body.password || '');
     const users = read(F.users);
-    const user = users.find(u => !u.bot && !u.fake && ((u.email || '').toLowerCase() === login || u.handle === login) && checkPass(password, u.password));
+    const user = users.find(u => !u.bot && !u.fake && (
+        (u.email || '').toLowerCase() === login ||
+        (u.handles || [u.handle]).includes(login)
+    ) && checkPass(password, u.password));
     if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
     if (!isHash(user.password)) { user.password = hashPass(password); write(F.users, users); }
     const token = newSession(user.id);
@@ -570,7 +574,10 @@ app.get('/api/users/search', (req, res) => {
     const s = String(req.query.q || '').toLowerCase().replace(/^@/, '');
     const me = Number(req.query.userId);
     res.json(read(F.users)
-        .filter(u => !u.fake && u.id !== me && (u.handle.includes(s) || u.username.toLowerCase().includes(s)))
+        .filter(u => !u.fake && u.id !== me && (
+            (u.handles || [u.handle]).some(h => h.includes(s)) ||
+            u.username.toLowerCase().includes(s)
+        ))
         .slice(0, 30).map(pub));
 });
 
@@ -610,82 +617,153 @@ app.put('/api/profile/:id', (req, res) => {
 });
 
 // ---------- Рынок юзернеймов ----------
-// Пользователь может выставить свой @handle на продажу за Mars.
-// Пока юзернейм «на витрине», он остаётся у владельца (виден в профиле).
-// После покупки: старый handle продавца → случайный временный (user<id>),
-// handle переходит к покупателю.
+// Каждый пользователь может владеть несколькими @handle (массив u.handles).
+// u.handle — «активный» (основной) юзернейм, по нему идёт авторизация и отображение.
+// u.handles — все юзернеймы: ['active', 'also1', 'also2', ...] (active всегда первый).
+// При покупке юзернейм добавляется покупателю в u.handles; продавец теряет только
+// проданный handle (если это был активный — новым активным становится следующий из списка,
+// если списка нет — временный user<id>).
+// Поиск находит пользователя по любому его юзернейму.
 const MAX_UNAME_PRICE = 10000000;
 
-function unameOut(u) {
-    return { id: u.id, handle: u.handle, username: u.username, avatar: u.avatar || '', verified: VERIFIED.has(u.handle), acc: u.acc || null, listing: u.uListing };
+// Убедиться что handles синхронизирован с handle
+function syncHandles(u) {
+    if (!u.handles) u.handles = [u.handle];
+    if (!u.handles.includes(u.handle)) u.handles.unshift(u.handle);
 }
 
-// Список юзернеймов на продаже
+function unameOut(u) {
+    const allHandles = u.handles || [u.handle];
+    const others = allHandles.filter(h => h !== u.handle);
+    return {
+        id: u.id, handle: u.handle, handles: allHandles, others,
+        username: u.username, avatar: u.avatar || '',
+        verified: VERIFIED.has(u.handle), acc: u.acc || null,
+        listing: u.uListing
+    };
+}
+
+// Поиск по любому из юзернеймов пользователя
+function userMatchesHandle(u, q) {
+    const all = u.handles || [u.handle];
+    return all.some(h => h.includes(q));
+}
+
+// Список юзернеймов на продаже — каждый лот это отдельный handle
+// Структура лота: { handle, ownerId, price, at }
+// Храним в u.uListings: [{handle, price, at}, ...]
 app.get('/api/usernames', (req, res) => {
     const users = read(F.users);
-    let list = users.filter(u => u.uListing && !u.bot && !u.fake);
     const q = String(req.query.q || '').toLowerCase().replace(/^@/, '');
-    if (q) list = list.filter(u => u.handle.includes(q) || u.username.toLowerCase().includes(q));
-    list.sort(req.query.sort === 'price'
-        ? (a, b) => a.uListing.price - b.uListing.price
-        : (a, b) => b.uListing.at.localeCompare(a.uListing.at));
-    res.json(list.slice(0, 200).map(u => unameOut(u)));
+    const byPrice = req.query.sort === 'price';
+    // Собираем все лоты от всех пользователей
+    const lots = [];
+    users.filter(u => !u.bot && !u.fake && u.uListings && u.uListings.length).forEach(u => {
+        u.uListings.forEach(l => {
+            if (q && !l.handle.includes(q) && !u.username.toLowerCase().includes(q)) return;
+            lots.push({ ...unameOut(u), listingHandle: l.handle, listing: l });
+        });
+    });
+    lots.sort(byPrice
+        ? (a, b) => a.listing.price - b.listing.price
+        : (a, b) => b.listing.at.localeCompare(a.listing.at));
+    res.json(lots.slice(0, 200));
 });
 
-// Выставить свой юзернейм на продажу / изменить цену
+// Выставить конкретный @handle на продажу
 app.post('/api/usernames/list', async (req, res) => {
     const me = req.uid, price = Math.floor(Number(req.body.price));
+    const handle = String(req.body.handle || '').trim().replace(/^@/, '').toLowerCase();
     if (!Number.isFinite(price) || price < 1 || price > MAX_UNAME_PRICE)
         return res.status(400).json({ error: `Цена — от 1 до ${MAX_UNAME_PRICE} Mars` });
     const users = read(F.users), u = users.find(x => x.id === me);
     if (!u) return res.status(401).json({ error: 'Войдите в аккаунт' });
-    u.uListing = { price, at: u.uListing ? u.uListing.at : new Date().toISOString() };
+    syncHandles(u);
+    if (!u.handles.includes(handle))
+        return res.status(400).json({ error: 'Этот юзернейм вам не принадлежит' });
+    u.uListings = u.uListings || [];
+    const existing = u.uListings.find(l => l.handle === handle);
+    if (existing) { existing.price = price; }
+    else { u.uListings.push({ handle, price, at: new Date().toISOString() }); }
     write(F.users, users);
     await persist();
-    res.json({ success: true, listing: u.uListing });
+    res.json({ success: true, listings: u.uListings, handles: u.handles });
 });
 
-// Снять с продажи
+// Снять конкретный handle с продажи
 app.post('/api/usernames/unlist', async (req, res) => {
+    const handle = String(req.body.handle || '').trim().replace(/^@/, '').toLowerCase();
     const users = read(F.users), u = users.find(x => x.id === req.uid);
     if (!u) return res.status(401).json({ error: 'Не найден' });
-    delete u.uListing;
+    u.uListings = (u.uListings || []).filter(l => l.handle !== handle);
     write(F.users, users);
     await persist();
-    res.json({ success: true });
+    res.json({ success: true, listings: u.uListings || [] });
+});
+
+// Сделать handle активным (основным)
+app.post('/api/usernames/activate', async (req, res) => {
+    const handle = String(req.body.handle || '').trim().replace(/^@/, '').toLowerCase();
+    const users = read(F.users), u = users.find(x => x.id === req.uid);
+    if (!u) return res.status(401).json({ error: 'Не найден' });
+    syncHandles(u);
+    if (!u.handles.includes(handle))
+        return res.status(400).json({ error: 'Этот юзернейм вам не принадлежит' });
+    // Проверяем что не выставлен на продажу (нельзя сделать активным продаваемый)
+    if ((u.uListings || []).some(l => l.handle === handle))
+        return res.status(400).json({ error: 'Сначала снимите юзернейм с продажи' });
+    u.handle = handle;
+    write(F.users, users);
+    broadcast({ type: 'chat' });
+    await persist();
+    res.json({ success: true, handle: u.handle, handles: u.handles });
 });
 
 // Купить юзернейм
 app.post('/api/usernames/buy', async (req, res) => {
     const me = req.uid;
+    const sellHandle = String(req.body.handle || '').trim().replace(/^@/, '').toLowerCase();
     const users = read(F.users);
     const seller = users.find(u => u.id === Number(req.body.sellerId));
     const buyer = users.find(u => u.id === me);
-    if (!seller || !seller.uListing) return res.status(404).json({ error: 'Юзернейм снят с продажи' });
+    if (!seller) return res.status(404).json({ error: 'Продавец не найден' });
+    syncHandles(seller); syncHandles(buyer);
+    const lot = (seller.uListings || []).find(l => l.handle === sellHandle);
+    if (!lot) return res.status(404).json({ error: 'Юзернейм снят с продажи' });
     if (seller.id === me) return res.status(400).json({ error: 'Нельзя купить свой юзернейм' });
-    if (Number(req.body.price) !== seller.uListing.price)
-        return res.status(409).json({ error: `Цена изменилась: теперь ${seller.uListing.price} Mars. Откройте лот ещё раз.` });
-    const price = seller.uListing.price;
+    if (Number(req.body.price) !== lot.price)
+        return res.status(409).json({ error: `Цена изменилась: теперь ${lot.price} Mars. Откройте лот ещё раз.` });
+    const price = lot.price;
     if (!isUnlimited(buyer) && (buyer.mars || 0) < price)
         return res.status(400).json({ error: `Не хватает Mars: нужно ${price}, у вас ${buyer.mars || 0}` });
-    // Покупатель отдаёт свой текущий handle продавцу (они меняются) или продавец получает временный
-    const buyerOldHandle = buyer.handle;
-    const sellerHandle = seller.handle;
-    // Ставим продавцу временный handle: user + часть id
-    seller.handle = 'user' + String(seller.id).slice(-8);
-    // Если временный занят — добавляем рандом
-    while (users.some(u => u.id !== seller.id && u.handle === seller.handle))
-        seller.handle = 'user' + String(seller.id).slice(-6) + Math.floor(Math.random() * 999);
-    buyer.handle = sellerHandle;
-    delete seller.uListing;
+
+    // Убираем handle у продавца
+    seller.handles = seller.handles.filter(h => h !== sellHandle);
+    seller.uListings = seller.uListings.filter(l => l.handle !== sellHandle);
+    // Если продали активный — переключаем на следующий или временный
+    if (seller.handle === sellHandle) {
+        if (seller.handles.length) {
+            seller.handle = seller.handles[0];
+        } else {
+            seller.handle = 'user' + String(seller.id).slice(-8);
+            while (users.some(u => u.id !== seller.id && (u.handles || [u.handle]).includes(seller.handle)))
+                seller.handle = 'user' + String(seller.id).slice(-6) + Math.floor(Math.random() * 999);
+            seller.handles = [seller.handle];
+        }
+    }
+    // Добавляем handle покупателю
+    buyer.handles.push(sellHandle);
+    // Активный у покупателя не меняем — новый handle идёт в «а также»
     if (!isUnlimited(buyer)) buyer.mars -= price;
     seller.mars = (seller.mars || 0) + price;
     write(F.users, users);
     sendTo([seller.id], { type: 'wallet', data: walletOf(seller) });
+    sendTo([seller.id], { type: 'profile', data: { handle: seller.handle, handles: seller.handles } });
     sendTo([me], { type: 'wallet', data: walletOf(buyer) });
-    broadcast({ type: 'chat' }); // у всех обновятся никнеймы
+    sendTo([me], { type: 'profile', data: { handle: buyer.handle, handles: buyer.handles } });
+    broadcast({ type: 'chat' });
     await persist();
-    res.json({ success: true, handle: buyer.handle, ...walletOf(buyer) });
+    res.json({ success: true, handle: buyer.handle, handles: buyer.handles, ...walletOf(buyer) });
 });
 
 // ---------- Чаты ----------
