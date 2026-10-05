@@ -148,11 +148,12 @@ const handleTaken = (users, h, exceptId) =>
 // Файлы
 const MIME = {
     'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
-    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov'
+    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+    'audio/webm': 'weba', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3'
 };
-const URL_RE = /^\/uploads\/[\w-]+\.(jpg|png|webp|gif|mp4|webm|mov)$/;
+const URL_RE = /^\/uploads\/[\w-]+\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|ogg|mp3)$/;
 const fileOk = u => typeof u === 'string' && URL_RE.test(u) && fs.existsSync(path.join(UP, path.basename(u)));
-const kindOf = u => /\.(mp4|webm|mov)$/.test(u) ? 'video' : 'image';
+const kindOf = u => /\.(mp4|webm|mov)$/.test(u) ? 'video' : /\.(weba|m4a|ogg|mp3)$/.test(u) ? 'voice' : 'image';
 const imageOk = u => fileOk(u) && kindOf(u) === 'image';
 
 // Пароли: scrypt. Старые (открытым текстом) принимаются и сразу заменяются на хэш
@@ -342,9 +343,11 @@ app.post('/api/upload', express.raw({ type: () => true, limit: '50mb' }), async 
     const buf = req.body;
     if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: 'Пустой файл' });
 
-    const isImg = !['mp4', 'webm', 'mov'].includes(ext);
+    const isImg = !['mp4', 'webm', 'mov', 'weba', 'm4a', 'ogg', 'mp3'].includes(ext);
     if (req.query.kind === 'avatar' && (!isImg || buf.length > 5 * 1024 * 1024))
         return res.status(400).json({ error: 'Для аватарки нужно фото до 5 МБ' });
+    if (req.query.kind === 'voice' && isImg)
+        return res.status(400).json({ error: 'Голосовое сообщение — это аудио' });
 
     const name = crypto.randomUUID() + '.' + ext;
     try {
@@ -1627,6 +1630,8 @@ wss.on('connection', ws => {
                     media = { kind: kindOf(m.media.url), url: m.media.url };
                     const w = Number(m.media.w), h = Number(m.media.h);
                     if (w > 0 && h > 0 && w < 20000 && h < 20000) { media.w = Math.round(w); media.h = Math.round(h); }
+                    const dur = Number(m.media.dur);
+                    if (media.kind === 'voice' && dur > 0 && dur < 3600) media.dur = Math.round(dur);
                 }
                 if (!text && !media) return;
 
