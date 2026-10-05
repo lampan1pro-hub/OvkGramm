@@ -1772,10 +1772,11 @@ function unCard(u, back) {
     const alsoHtml = others.length
         ? `<div class="un-also">а также ${others.map(h => `<a data-q="${esc(h)}">@${esc(h)}</a>`).join(', ')}</div>`
         : '';
+    const sellHandle = u.listingHandle || u.handle;
     return `<div class="un-card" data-uid="${u.id}">
   <div class="un-av">${uav(u, 'm', true)}</div>
   <div class="un-body">
-    <div class="un-handle">@${esc(u.handle)}${isMine ? '<span class="un-my-badge">Мой</span>' : ''}</div>
+    <div class="un-handle">@${esc(sellHandle)}${isMine ? '<span class="un-my-badge">Мой</span>' : ''}</div>
     ${alsoHtml}
   </div>
   <div class="un-price">👽 ${u.listing.price}</div>
@@ -1844,7 +1845,7 @@ function unameInfo(u, back) {
     const row = (a, v) => `<div class="gr"><div class="gk">${a}</div><div class="gv">${v}</div></div>`;
     modal(`<div style="text-align:center;padding:10px 0 4px">
   ${QR_SVG.replace('class="un-qr"', 'style="width:72px;height:72px;opacity:.7;margin:0 auto 10px;display:block"')}
-  <div style="font-size:28px;font-weight:800">@${esc(u.handle)}</div>
+  <div style="font-size:28px;font-weight:800">@${esc(u.listingHandle || u.handle)}</div>
   <div style="color:var(--t2);font-size:13px;margin-top:4px">${esc(u.username)}</div>
 </div>
 <div class="gtab">
@@ -1867,9 +1868,9 @@ ${isMine
         };
     } else if ($('#unbuy')) {
         $('#unbuy').onclick = async () => {
-            if (!confirm(`Купить @${u.handle} за ${u.listing.price} Mars?`)) return;
+            if (!confirm(`Купить @${u.listingHandle || u.handle} за ${u.listing.price} Mars?`)) return;
             try {
-                const r = await api('/api/usernames/buy', 'POST', {sellerId: u.id, price: u.listing.price});
+                const r = await api('/api/usernames/buy', 'POST', {sellerId: u.id, handle: u.listingHandle, price: u.listing.price});
                 me = {...me, handle: r.handle, mars: r.mars, unlimited: r.unlimited};
                 delete me.uListing; save(); paintMe();
                 toast(`🎉 Юзернейм @${r.handle} теперь ваш!`); back();
