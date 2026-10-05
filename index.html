@@ -1177,7 +1177,8 @@ function toggleVoice(el) {
     el.querySelector('.vct').textContent = fmtDur(a.currentTime);
   };
   a.onended = () => resetVc(el);
-  a.play().catch(() => { resetVc(el); toast('Не удалось воспроизвести'); });
+  a.onerror = () => { resetVc(el); toast('Голосовое не загрузилось. Проверь соединение'); };
+  a.play().catch(() => { resetVc(el); toast('Не удалось воспроизвести — возможно, формат не поддерживается этим устройством'); });
 }
 const btnsHtml = m => m.buttons && m.buttons.length ? '<div class="bb">' + m.buttons.map((row, r) => '<div class="br">' + row.map((b, k) => `<button type="button" class="bbtn" data-r="${r}" data-k="${k}">${esc(b.t)}</button>`).join('') + '</div>').join('') + '</div>' : '';
 const cmRow = m => {
@@ -1317,12 +1318,22 @@ function paintRec() {
   $('#recbar').hidden = false;
   $('#recbar .rt').textContent = fmtDur((Date.now() - rec.t0) / 1000);
 }
+// Формат записи: mp4/aac умеют все современные браузеры (Android + iPhone),
+// webm/opus — не играет на iPhone, поэтому он — запасной вариант
+function pickRecMime() {
+  const list = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm;codecs=pcm', 'audio/webm'];
+  if (window.MediaRecorder && MediaRecorder.isTypeSupported) {
+    for (const t of list) { try { if (MediaRecorder.isTypeSupported(t)) return t; } catch {} }
+  }
+  return '';
+}
 async function toggleRec() {
   if (rec) return stopRec(true);
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast('Браузер не поддерживает запись голоса');
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mr = new MediaRecorder(stream);
+    const mime = pickRecMime();
+    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     const chunks = [];
     mr.ondataavailable = e => e.data.size && chunks.push(e.data);
     rec = { mr, chunks, stream, t0: Date.now(), tick: setInterval(paintRec, 250) };
