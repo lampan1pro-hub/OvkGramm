@@ -237,7 +237,7 @@ const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
     ...((u.handles || [u.handle]).length > 1 ? { others: u.handles.filter(h => h !== u.handle) } : {}),
-    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc })
+    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc }), ...(u.banned && { banned: true })
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u),
     ...(u.uListings && u.uListings.length ? { uListing: u.uListings.find(l => l.handle === u.handle) || u.uListings[0] } : {}) });
@@ -559,7 +559,7 @@ app.post('/api/login', async (req, res) => {
     const login = String(req.body.email || '').trim().toLowerCase().replace(/^@/, '');
     const password = String(req.body.password || '');
     const users = read(F.users);
-    const user = users.find(u => !u.bot && !u.fake && (
+    const user = users.find(u => !u.bot && !u.fake && !u.banned && (
         (u.email || '').toLowerCase() === login ||
         (u.handles || [u.handle]).includes(login)
     ) && checkPass(password, u.password));
@@ -582,7 +582,7 @@ app.get('/api/users/search', (req, res) => {
     const s = String(req.query.q || '').toLowerCase().replace(/^@/, '');
     const me = Number(req.query.userId);
     res.json(read(F.users)
-        .filter(u => !u.fake && u.id !== me && (
+        .filter(u => !u.fake && !u.banned && u.id !== me && (
             (u.handles || [u.handle]).some(h => h.includes(s)) ||
             u.username.toLowerCase().includes(s)
         ))
@@ -1599,6 +1599,66 @@ app.delete('/api/chats/:chatId', async (req, res) => {
     } else if (chat.creator === me) dropAll();
     else leave();
     sendTo(members, { type: 'chat' });
+    await persist();
+    res.json({ success: true });
+});
+
+// ---------- Админ-панель (доступна только аккаунту с юзернеймом ADMIN_HANDLE) ----------
+const ADMIN_HANDLE = 'saimon';
+const isAdminUid = uid => { const u = read(F.users).find(x => x.id === uid); return !!u && u.handle === ADMIN_HANDLE; };
+const adminOnly = (req, res, next) => isAdminUid(req.uid) ? next() : res.status(403).json({ error: 'Нет доступа' });
+
+app.get('/api/admin/channels', adminOnly, (req, res) => {
+    const users = read(F.users);
+    res.json(read(F.chats).filter(c => c.type === 'channel').map(c => ({
+        id: c.id, name: c.name, handle: c.handle || '', members: (c.members || []).length,
+        creator: ((users.find(u => u.id === c.creator)) || {}).username || '—'
+    })));
+});
+
+app.delete('/api/admin/channels/:id', adminOnly, async (req, res) => {
+    const chats = read(F.chats), ch = chats.find(c => String(c.id) === req.params.id && c.type === 'channel');
+    if (!ch) return res.status(404).json({ error: 'Канал не найден' });
+    const members = [...(ch.members || [])];
+    write(F.chats, chats.filter(c => c !== ch));
+    write(F.messages, read(F.messages).filter(m => m.chatId !== ch.id));
+    sendTo(members, { type: 'chat' });
+    await persist();
+    res.json({ success: true });
+});
+
+app.get('/api/admin/users', adminOnly, (req, res) => {
+    const s = String(req.query.q || '').toLowerCase().replace(/^@/, '');
+    res.json(read(F.users)
+        .filter(u => !u.fake && !u.bot && !u.banned && u.handle !== ADMIN_HANDLE && (
+            u.username.toLowerCase().includes(s) ||
+            (u.handles || [u.handle]).some(h => (h || '').includes(s))))
+        .slice(0, 30).map(pub));
+});
+
+// Блокировка: аккаунт остаётся в чатах (сообщения сохраняются), но без имени, юзернеймов,
+// аватарки, профиля и входа. Для всех он отображается как призрак «Аккаунт заблокирован».
+app.post('/api/admin/users/:id/block', adminOnly, async (req, res) => {
+    const id = Number(req.params.id);
+    const users = read(F.users), u = users.find(x => x.id === id);
+    if (!u || u.bot || u.fake) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (u.handle === ADMIN_HANDLE) return res.status(400).json({ error: 'Нельзя заблокировать администратора' });
+    u.banned = true;
+    u.username = 'Аккаунт заблокирован';
+    u.handle = '';
+    u.handles = [];
+    u.uListings = [];
+    u.bio = '';
+    u.avatar = '';
+    delete u.contactNames;
+    delete u.acc;
+    write(F.users, users);
+    // выкидываем все сессии и открытые сокеты
+    const sessions = read(F.sessions);
+    Object.keys(sessions).forEach(t => { if (sessions[t].uid === id) delete sessions[t]; });
+    write(F.sessions, sessions);
+    sockets.get(id)?.forEach(s => { try { s.close(); } catch {} });
+    broadcast({ type: 'chat' });
     await persist();
     res.json({ success: true });
 });
