@@ -1825,7 +1825,7 @@ function listMyUsername(back) {
     $('#ulok').onclick = async () => {
         const price = Number($('#ulprice').value);
         try {
-            const r = await api('/api/usernames/list', 'POST', {price});
+            const r = await api('/api/usernames/list', 'POST', {handle: me.handle, price});
             me.uListing = r.listing; save();
             toast('Юзернейм выставлен на продажу'); back();
         } catch(x) { const e = $('#ulerr'); if(e) e.textContent = x.message; }
