@@ -987,7 +987,7 @@ function renderListNow() {
 <div class="lm"><span>${esc(preview(c))}</span>${n ? `<span class="bd">${n}</span>` : ''}</div></div></div>`;
   }).join('');
   const peopleHtml = people.length ? '<div class="sec">Люди</div>' + people.map(u =>
-    `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im">${nmH(u.username, u.verified, '', u.acc)}<div class="lm"><span>@${esc(u.handle)}</span></div></div></div>`).join('') : '';
+    `<div class="it" data-u="${u.id}">${uav(u, '', true)}<div class="im">${nmH(u.username, u.verified, '', u.acc)}<div class="lm"><span>@${esc(u.handle)}${(u.others && u.others.length) ? ' · а также ' + u.others.map(h => '@' + esc(h)).join(', ') : ''}</span></div></div></div>`).join('') : '';
 
   const botHtml = sFocus && !q && botUser ? '<div class="sec">Рекомендуем</div>' +
     `<div class="it" data-u="${botUser.id}">${uav(botUser, '', false)}<div class="im">${nmH(botUser.username, true)}<div class="lm"><span>@${esc(botUser.handle)} · накрутка подписчиков на канал</span></div></div></div>` +
@@ -1470,7 +1470,8 @@ function userProfile(u) {
   modal(`<div style="text-align:center">${uav(u, 'l', true)}
 <h2 style="margin-top:12px">${esc(u.username)}${u.verified ? BADGE : ''}${accH(u.acc)}</h2>
 <div style="color:var(--p)">@${esc(u.handle)}</div>
-<div style="color:var(--t2);font-size:13px">${u.online ? 'в сети' : 'не в сети'}</div>
+${(u.others && u.others.length) ? `<div style="color:var(--t2);font-size:13px;margin-top:5px;line-height:1.5">а также ${u.others.map(h => '<span style="color:var(--p)">@' + esc(h) + '</span>').join(', ')}</div>` : ''}
+<div style="color:var(--t2);font-size:13px;margin-top:6px">${u.online ? 'в сети' : 'не в сети'}</div>
 ${u.bio ? `<p style="margin-top:12px">${esc(u.bio)}</p>` : ''}</div>
 <div class="sec" style="padding:12px 0 6px">Подарки</div><div class="gg" id="pgifts"></div>
 <div class="row"><button class="btn" id="wr">Написать</button><button class="btn g" id="wg">🎁 Подарить</button></div>
@@ -1765,11 +1766,11 @@ const lotCard = g => {
 const QR_SVG = `<svg class="un-qr" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2.2"/><rect x="5" y="5" width="7" height="7" fill="currentColor"/><rect x="21" y="2" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2.2"/><rect x="24" y="5" width="7" height="7" fill="currentColor"/><rect x="2" y="21" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2.2"/><rect x="5" y="24" width="7" height="7" fill="currentColor"/><rect x="21" y="21" width="5" height="5" fill="currentColor"/><rect x="30" y="21" width="5" height="5" fill="currentColor"/><rect x="21" y="30" width="5" height="5" fill="currentColor"/><rect x="30" y="30" width="5" height="5" fill="currentColor"/></svg>`;
 
 function unCard(u, back) {
-    // «а также» — другие выставленные юзернеймы кроме текущего
-    const others = []; // можно расширить позже
+    // «а также» — остальные юзернеймы владельца (как в Telegram Fragment)
+    const others = u.others || [];
     const isMine = u.id === me.id;
     const alsoHtml = others.length
-        ? `<div class="un-also">а также ${others.map(h => `<a>@${esc(h)}</a>`).join(', ')}</div>`
+        ? `<div class="un-also">а также ${others.map(h => `<a data-q="${esc(h)}">@${esc(h)}</a>`).join(', ')}</div>`
         : '';
     return `<div class="un-card" data-uid="${u.id}">
   <div class="un-av">${uav(u, 'm', true)}</div>
@@ -1801,6 +1802,8 @@ async function usernameMarket(sort = 'new', q = '') {
     $('#umlist').onclick = () => listMyUsername(() => usernameMarket(sort, q));
     const box = $('#umbox');
     if (box) box.onclick = e => {
+        const link = e.target.closest('a[data-q]');
+        if (link) { usernameMarket(sort, link.dataset.q); return; }
         const card = e.target.closest('[data-uid]');
         if (!card) return;
         const u = list.find(x => x.id === Number(card.dataset.uid));
@@ -1846,6 +1849,7 @@ function unameInfo(u, back) {
 </div>
 <div class="gtab">
   ${row('Владелец', `${esc(u.username)} <span style="color:var(--t2)">@${esc(u.handle)}</span>`)}
+  ${(u.others && u.others.length) ? row('А также', u.others.map(h => '@' + esc(h)).join(', ')) : ''}
   ${row('Цена', `👽 ${u.listing.price} Mars`)}
   ${row('Ваш баланс', `👽 ${marsTxt()}`)}
 </div>
