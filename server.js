@@ -324,6 +324,7 @@ function shape(chat, me, users, list) {
         o.handle = chat.handle || '';
         o.open = !!chat.open;
         o.subscribers = chat.members.length;
+        o.verified = chat.members.length >= 5000; // синяя галочка в списке чатов и шапке
         if (chat.creator === me) o.members = chat.members.map(byId).filter(Boolean).map(pub); // список подписчиков видит автор
     }
     return o;
@@ -883,7 +884,8 @@ app.post('/api/groups/:id/members', (req, res) => {
 const cleanHandle = h => String(h || '').trim().replace(/^@/, '').toLowerCase();
 const chanPub = (c, me) => ({
     id: c.id, name: c.name, handle: c.handle || '', description: c.description || '',
-    avatar: c.avatar || '', subscribers: c.members.length, subscribed: c.members.includes(me), open: !!c.open
+    avatar: c.avatar || '', subscribers: c.members.length, subscribed: c.members.includes(me), open: !!c.open,
+    verified: c.members.length >= 5000 // официальная галочка: 5000+ подписчиков
 });
 const HANDLE_ERR = 'Юзернейм канала: 3–20 символов, латиница, цифры и _';
 
@@ -940,11 +942,11 @@ app.put('/api/channels/:id', (req, res) => {
 // Поиск каналов по названию и @юзернейму
 app.get('/api/channels/search', (req, res) => {
     const me = req.uid, q = String(req.query.q || '').trim().toLowerCase().replace(/^@/, '');
-    if (!q) return res.json([]);
-    res.json(read(F.chats)
+    // Пустой запрос — всегда топ-3 самых популярных каналов; с запросом — тоже по убыванию подписчиков
+    const list = read(F.chats)
         .filter(c => c.type === 'channel' && (c.name.toLowerCase().includes(q) || (c.handle || '').includes(q) || (c.description || '').toLowerCase().includes(q)))
-        .sort((a, b) => b.members.length - a.members.length)
-        .slice(0, 30).map(c => chanPub(c, me)));
+        .sort((a, b) => b.members.length - a.members.length);
+    res.json(list.slice(0, q ? 30 : 3).map(c => chanPub(c, me)));
 });
 
 app.post('/api/channels/:id/join', (req, res) => {
