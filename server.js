@@ -225,7 +225,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, storage: pool ? 'datab
 const sockets = new Map(); // userId -> Set<ws>
 
 // Галочка у аккаунтов с этими юзернеймами. Свой список: VERIFIED_HANDLES=saimon,durov,lesha
-const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha')
+const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha,anna')
     .split(',').map(x => x.trim().replace(/^@/, '').toLowerCase()).filter(Boolean));
 
 // Бесконечные Mars. Свой список: UNLIMITED_MARS_HANDLES=saimon,другой
@@ -1201,6 +1201,24 @@ app.post('/api/unblock/:userId', (req, res) => {
     blocks[me] = (blocks[me] || []).filter(id => id !== target);
     write(F.blocks, blocks);
     res.json({ success: true });
+});
+
+// ---------- Имена контактов («Мама» и т.п.) — видит только тот, кто задал ----------
+app.get('/api/contacts', (req, res) => {
+    const u = read(F.users).find(x => x.id === req.uid);
+    res.json((u && u.contactNames) || {});
+});
+
+app.put('/api/contacts/:userId', (req, res) => {
+    const me = req.uid, target = Number(req.params.userId);
+    if (!read(F.users).some(u => u.id === target)) return res.status(404).json({ error: 'Пользователь не найден' });
+    const users = read(F.users), u = users.find(x => x.id === me);
+    if (!u) return res.status(401).json({ error: 'Войдите в аккаунт' });
+    const name = String(req.body.name || '').trim().slice(0, 40);
+    u.contactNames = u.contactNames || {};
+    if (name) u.contactNames[target] = name; else delete u.contactNames[target];
+    write(F.users, users);
+    res.json(u.contactNames);
 });
 
 app.get('/api/blocks', (req, res) => {
