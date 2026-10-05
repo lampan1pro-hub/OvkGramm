@@ -1024,7 +1024,7 @@ $('#list').onclick = e => {
   const it = e.target.closest('.it');
   if (!it) return;
   if (it.dataset.c) openChat(it.dataset.c);
-  else if (it.dataset.ch) channelPreview(foundCh.find(c => c.id === it.dataset.ch));
+  else if (it.dataset.ch) channelPreview(foundCh.find(c => c.id === it.dataset.ch) || topChans.find(c => c.id === it.dataset.ch));
   else openUser(+it.dataset.u);
 };
 // Пока в поиске ничего не введено, сразу предлагаем бота накрутки
@@ -1034,7 +1034,6 @@ async function loadBot() {
   try { botUser = (await api('/api/users/search?q=nakrytka_bot')).find(u => u.bot) || null; renderList(); } catch {}
 }
 async function loadTopChans() {
-  if (topChans.length) return;
   try { topChans = await api('/api/channels/search?q='); renderList(); } catch {}
 }
 $('#q').onfocus = () => { sFocus = true; renderList(); loadBot(); loadTopChans(); };
