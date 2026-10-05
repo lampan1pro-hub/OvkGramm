@@ -126,7 +126,7 @@ async function persist() {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/uploads/:name', async (req, res) => {
     const name = req.params.name;
-    if (!/^[\w-]+\.(jpg|png|webp|gif|mp4|webm|mov)$/.test(name)) return res.sendStatus(404);
+    if (!/^[\w-]+\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|ogg|mp3)$/.test(name)) return res.sendStatus(404);
     const opts = { root: UP, dotfiles: 'allow', maxAge: '30d', immutable: true, headers: { 'X-Content-Type-Options': 'nosniff' } };
     try {
         if (!fs.existsSync(path.join(UP, name))) {
