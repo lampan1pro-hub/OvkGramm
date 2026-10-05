@@ -141,6 +141,9 @@ app.get('/uploads/:name', async (req, res) => {
 
 const directId = (a, b) => `d_${Math.min(a, b)}_${Math.max(a, b)}`;
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
+// Занят ли handle кем-то ещё: проверяем ВСЕ юзернеймы пользователей (основной + «а также»)
+const handleTaken = (users, h, exceptId) =>
+    users.some(u => u.id !== exceptId && (u.handles || [u.handle]).includes(h));
 
 // Файлы
 const MIME = {
@@ -527,7 +530,7 @@ app.post('/api/register', async (req, res) => {
 
     const users = read(F.users);
     if (users.some(u => u.email === email)) return res.status(400).json({ error: 'Этот email уже зарегистрирован' });
-    if (users.some(u => u.handle === handle)) return res.status(400).json({ error: 'Этот юзернейм уже занят' });
+    if (handleTaken(users, handle)) return res.status(400).json({ error: 'Этот юзернейм уже занят' });
     if (EMAIL_VERIFY) {
         const code = String(req.body.code || '').trim(), p = pendingCodes.get(email);
         if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Введите 6-значный код из письма' });
@@ -603,7 +606,7 @@ app.put('/api/profile/:id', (req, res) => {
     if (handle !== undefined) {
         const h = String(handle).trim().replace(/^@/, '').toLowerCase();
         if (!HANDLE_RE.test(h)) return res.status(400).json({ error: 'Юзернейм: 3–20 символов, латиница, цифры и _' });
-        if (users.some(x => x.id !== u.id && x.handle === h)) return res.status(400).json({ error: 'Этот юзернейм уже занят' });
+        if (handleTaken(users, h, u.id)) return res.status(400).json({ error: 'Этот юзернейм уже занят' });
         u.handle = h;
     }
     if (bio !== undefined) u.bio = String(bio).slice(0, 200);
@@ -712,6 +715,8 @@ app.post('/api/usernames/activate', async (req, res) => {
     syncHandles(u);
     if (!u.handles.includes(handle))
         return res.status(400).json({ error: 'Этот юзернейм вам не принадлежит' });
+    if (handleTaken(users, handle, u.id))
+        return res.status(400).json({ error: 'Этот юзернейм уже занят другим пользователем' });
     // Проверяем что не выставлен на продажу (нельзя сделать активным продаваемый)
     if ((u.uListings || []).some(l => l.handle === handle))
         return res.status(400).json({ error: 'Сначала снимите юзернейм с продажи' });
@@ -733,6 +738,8 @@ app.post('/api/usernames/buy', async (req, res) => {
     syncHandles(seller); syncHandles(buyer);
     const lot = (seller.uListings || []).find(l => l.handle === sellHandle);
     if (!lot) return res.status(404).json({ error: 'Юзернейм снят с продажи' });
+    if (handleTaken(users, sellHandle, seller.id))
+        return res.status(409).json({ error: 'Этот юзернейм уже занят, лот недействителен' });
     if (seller.id === me) return res.status(400).json({ error: 'Нельзя купить свой юзернейм' });
     if (Number(req.body.price) !== lot.price)
         return res.status(409).json({ error: `Цена изменилась: теперь ${lot.price} Mars. Откройте лот ещё раз.` });
