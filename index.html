@@ -478,8 +478,8 @@ html[data-theme=dark] .un-handle{color:#e8f0fb}
   #rdonly{margin:6px 8px calc(6px + env(safe-area-inset-bottom))}
 }
 
-/* ===== Шапка: название не перекрывает кнопки ===== */
-.sh h1{flex:0 1 auto;min-width:0}              /* название сжимается первым */
+/* ===== Шапка: название слева, кнопки прижаты вправо ===== */
+.sh h1{flex:1;min-width:0}                     /* название растягивается и толкает кнопки к правому краю */
 .sh .ib,.sh #meBtn{flex-shrink:0}              /* кнопки и профиль — никогда не сжимаются */
 .sh{gap:4px}
 @media(max-width:768px){
