@@ -1177,8 +1177,13 @@ function toggleVoice(el) {
     el.querySelector('.vct').textContent = fmtDur(a.currentTime);
   };
   a.onended = () => resetVc(el);
-  a.onerror = () => { resetVc(el); toast('Голосовое не загрузилось. Проверь соединение'); };
-  a.play().catch(() => { resetVc(el); toast('Не удалось воспроизвести — возможно, формат не поддерживается этим устройством'); });
+  let loadFailed = false;
+  a.onerror = () => { loadFailed = true; resetVc(el); toast('Голосовое не загрузилось: файл утерян после перезапуска сервера или нет соединения'); };
+  a.play().catch(() => {
+    if (loadFailed) return; // ошибка загрузки уже показана
+    resetVc(el);
+    toast('Формат не поддерживается этим устройством (записано на другой ОС?)');
+  });
 }
 const btnsHtml = m => m.buttons && m.buttons.length ? '<div class="bb">' + m.buttons.map((row, r) => '<div class="br">' + row.map((b, k) => `<button type="button" class="bbtn" data-r="${r}" data-k="${k}">${esc(b.t)}</button>`).join('') + '</div>').join('') + '</div>' : '';
 const cmRow = m => {
@@ -1318,10 +1323,14 @@ function paintRec() {
   $('#recbar').hidden = false;
   $('#recbar .rt').textContent = fmtDur((Date.now() - rec.t0) / 1000);
 }
-// Формат записи: mp4/aac умеют все современные браузеры (Android + iPhone),
-// webm/opus — не играет на iPhone, поэтому он — запасной вариант
+// Формат записи по платформе: webm/opus — идеален для Android/ПК,
+// на iPhone Safari пишет mp4 (webm она не играет вообще)
 function pickRecMime() {
-  const list = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm;codecs=pcm', 'audio/webm'];
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const list = isIOS
+    ? ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+    : ['audio/webm;codecs=opus', 'audio/webm;codecs=pcm', 'audio/webm', 'audio/mp4'];
   if (window.MediaRecorder && MediaRecorder.isTypeSupported) {
     for (const t of list) { try { if (MediaRecorder.isTypeSupported(t)) return t; } catch {} }
   }
@@ -2489,4 +2498,4 @@ if (window.visualViewport) {
 })();
 </script>
 </body>
-</html>
+  </html>
