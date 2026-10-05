@@ -479,19 +479,20 @@ html[data-theme=dark] .un-handle{color:#e8f0fb}
 }
 
 /* ===== Шапка: название слева, кнопки прижаты вправо ===== */
-.sh h1{flex:1;min-width:0}                     /* название растягивается и толкает кнопки к правому краю */
+.sh h1{flex:1 1 auto;min-width:0}              /* название забирает всё свободное место и толкает кнопки к правому краю */
 .sh .ib,.sh #meBtn{flex-shrink:0}              /* кнопки и профиль — никогда не сжимаются */
 .sh{gap:4px}
+#pushBtn{margin-left:auto}                     /* страховка: первую кнопку всегда прижимает вправо */
 @media(max-width:768px){
   .sh{padding:8px 8px 6px}
-  .sh h1{font-size:17px;max-width:38vw}        /* SAIMONGRAM целиком на узком экране */
+  .sh h1{font-size:17px}                       /* без max-width — иначе flex:1 не срабатывает */
   #meBtn span{display:none}                    /* на телефоне — только аватарка, как в ТГ */
   #meBtn{padding:2px}
   #meBtn .av{width:34px;height:34px}
   .sh .ib{width:36px;height:36px;font-size:18px}
 }
 @media(max-width:400px){
-  .sh h1{font-size:15px;max-width:30vw}
+  .sh h1{font-size:15px}
 }
 </style>
 </head>
