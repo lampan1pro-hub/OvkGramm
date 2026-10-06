@@ -95,8 +95,9 @@ function write(f, d) {
 }
 
 let flushT = null, flushing = null;
+const saved = {};            // последнее значение, которое точно записано в базу
 function scheduleFlush() {
-    if (!flushT) flushT = setTimeout(() => { flushT = null; persist(); }, 400);
+    if (!flushT) flushT = setTimeout(() => { flushT = null; persist(); }, 150);
 }
 // Записать накопленное в базу прямо сейчас (не бросает исключений)
 async function persist() {
@@ -112,6 +113,7 @@ async function persist() {
                 await pool.query(
                     'insert into kv (key, value) values ($1, $2::jsonb) on conflict (key) do update set value = excluded.value, updated_at = now()',
                     [k, mem[k]]);
+                saved[k] = mem[k];
             } catch (e) {
                 console.error('DB: не удалось сохранить', k, '-', e.message);
                 dirty.add(k);
@@ -121,6 +123,14 @@ async function persist() {
     })();
     try { await flushing; } finally { flushing = null; }
 }
+
+// Страховка автосохранения: раз в 20 секунд сверяем память с базой и дописываем всё, что разошлось
+function checkpoint() {
+    if (!pool) return;
+    for (const k of Object.keys(mem)) if (mem[k] !== saved[k]) dirty.add(k);
+    if (dirty.size) scheduleFlush();
+}
+setInterval(checkpoint, 20000).unref();
 
 // Отдаём только страницу и загруженные файлы (но не папку data целиком)
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
@@ -1926,7 +1936,13 @@ async function init() {
 }
 
 // При остановке сервера дописываем в базу всё, что не успело сохраниться
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { await persist(); process.exit(0); });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function finalSave() {
+    for (const k of Object.keys(mem)) if (mem[k] !== saved[k]) dirty.add(k);
+    await Promise.race([persist(), sleep(8000)]);
+}
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { await finalSave(); process.exit(0); });
+process.on('beforeExit', () => { if (pool && dirty.size) finalSave(); });
 
 // Render усыпляет бесплатный сервис через 15 минут без входящих запросов.
 // Пока сервер работает, он сам обращается к своему адресу раз в 8 минут (выключить: KEEP_ALIVE=0).
