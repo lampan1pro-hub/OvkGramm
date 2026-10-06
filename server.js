@@ -15,7 +15,7 @@ app.use(express.json({ limit: '1mb' }));
 
 // Каждый запрос к /api (кроме входа и регистрации) подписан токеном. Личность берём из токена,
 // а не из userId, который прислал клиент: иначе можно действовать от чужого имени (и тратить чужие Mars).
-const OPEN_API = new Set(['/register', '/register/code', '/login', '/health', '/config']);
+const OPEN_API = new Set(['/register', '/login', '/health', '/config']);
 app.use('/api', (req, res, next) => {
     if (OPEN_API.has(req.path)) return next();
     const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
@@ -379,62 +379,8 @@ app.post('/api/upload', express.raw({ type: () => true, limit: '50mb' }), async 
     res.json({ url: '/uploads/' + name, kind: isImg ? 'image' : 'video' });
 });
 
-// ---------- Почта: код подтверждения при регистрации ----------
-// Письма уходят через HTTP-API почтового сервиса (SMTP на бесплатном Render закрыт). Нужен один из ключей:
-//   BREVO_API_KEY (brevo.com, бесплатно 300 писем/день, домен не нужен) или RESEND_API_KEY (resend.com, нужен свой домен),
-//   плюс MAIL_FROM — адрес отправителя, подтверждённый в сервисе. Ключей нет — регистрация работает без кода.
-//   EMAIL_VERIFY=0 принудительно выключает проверку.
-const MAIL_FROM = process.env.MAIL_FROM || '';
-const MAIL_NAME = process.env.MAIL_FROM_NAME || 'SAIMONGRAM';
-const MAIL_PROVIDER = process.env.EMAIL_VERIFY === '0' || !MAIL_FROM ? '' : process.env.BREVO_API_KEY ? 'brevo' : process.env.RESEND_API_KEY ? 'resend' : '';
-// Подтверждение по почте выключено: регистрация без кода
-const EMAIL_VERIFY = false;
-
-async function sendMail(to, subject, text) {
-    const html = `<div style="font-family:Arial,sans-serif;font-size:16px;color:#222">${text.split('\n').map(l => `<p>${l.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</p>`).join('')}</div>`;
-    const r = MAIL_PROVIDER === 'brevo'
-        ? await fetch('https://api.brevo.com/v3/smtp/email', {
-            method: 'POST', headers: { 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
-            body: JSON.stringify({ sender: { name: MAIL_NAME, email: MAIL_FROM }, to: [{ email: to }], subject, htmlContent: html, textContent: text }),
-            signal: AbortSignal.timeout(15000)
-        })
-        : await fetch('https://api.resend.com/emails', {
-            method: 'POST', headers: { authorization: 'Bearer ' + process.env.RESEND_API_KEY, 'content-type': 'application/json' },
-            body: JSON.stringify({ from: `${MAIL_NAME} <${MAIL_FROM}>`, to: [to], subject, html, text }),
-            signal: AbortSignal.timeout(15000)
-        });
-    if (!r.ok) throw new Error(`mail ${MAIL_PROVIDER}: ${r.status} ${(await r.text()).slice(0, 200)}`);
-}
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const pendingCodes = new Map(); // email -> { hash, exp, tries, sentAt }
-const ipSends = new Map();      // ip -> [время отправок]
-const codeHash = (email, code) => crypto.createHash('sha256').update(`${email}:${code}:${meta.createdAt}`).digest();
-setInterval(() => {
-    const now = Date.now();
-    pendingCodes.forEach((v, k) => { if (v.exp < now) pendingCodes.delete(k); });
-    ipSends.forEach((v, k) => { const f = v.filter(t => now - t < 3600e3); f.length ? ipSends.set(k, f) : ipSends.delete(k); });
-}, 5 * 60 * 1000).unref();
-const clientIp = req => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-
-app.get('/api/config', (req, res) => res.json({ emailVerify: EMAIL_VERIFY, vapidKey: vapid ? vapid.pub : '' }));
-
-app.post('/api/register/code', async (req, res) => {
-    if (!EMAIL_VERIFY) return res.json({ success: true, skipped: true });
-    const email = String(req.body.email || '').trim().toLowerCase();
-    if (!EMAIL_RE.test(email) || email.length > 120) return res.status(400).json({ error: 'Введите корректный email' });
-    if (read(F.users).some(u => u.email === email)) return res.status(400).json({ error: 'Этот email уже зарегистрирован' });
-    const now = Date.now(), prev = pendingCodes.get(email), ip = clientIp(req);
-    if (prev && now - prev.sentAt < 60000) return res.status(429).json({ error: `Код уже отправлен. Повторить можно через ${Math.ceil((60000 - (now - prev.sentAt)) / 1000)} с` });
-    const sends = (ipSends.get(ip) || []).filter(t => now - t < 3600e3);
-    if (sends.length >= 8) return res.status(429).json({ error: 'Слишком много запросов. Попробуйте через час' });
-    const code = String(crypto.randomInt(100000, 1000000));
-    try { await sendMail(email, `Код подтверждения: ${code}`, `Ваш код для регистрации в ${MAIL_NAME}: ${code}\nКод действует 10 минут.\nЕсли это были не вы — просто проигнорируйте письмо.`); }
-    catch (e) { console.error('mail:', e.message); return res.status(502).json({ error: 'Не удалось отправить письмо. Проверьте адрес или попробуйте позже' }); }
-    pendingCodes.set(email, { hash: codeHash(email, code), exp: now + 10 * 60 * 1000, tries: 0, sentAt: now });
-    sends.push(now); ipSends.set(ip, sends);
-    res.json({ success: true });
-});
+app.get('/api/config', (req, res) => res.json({ vapidKey: vapid ? vapid.pub : '' }));
 
 // ---------- Уведомления (Web Push, без внешних библиотек) ----------
 // Ключи VAPID создаются при первом запуске и хранятся рядом с остальными данными (meta).
@@ -457,7 +403,7 @@ async function ensureVapid() {
 }
 const vapidAuth = endpoint => {
     const head = b64u(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
-    const claims = b64u(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: process.env.VAPID_SUBJECT || `mailto:${MAIL_FROM || 'admin@saimongram.app'}` }));
+    const claims = b64u(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: process.env.VAPID_SUBJECT || 'mailto:admin@saimongram.app' }));
     const sig = crypto.sign('sha256', Buffer.from(`${head}.${claims}`), { key: vapid.key, dsaEncoding: 'ieee-p1363' });
     return `vapid t=${head}.${claims}.${b64u(sig)}, k=${vapid.pub}`;
 };
@@ -503,7 +449,8 @@ function notifyMessage(chat, msg, preview) {
     const from = read(F.users).find(u => u.id === msg.senderId);
     const who = from ? from.username : 'Новое сообщение';
     const direct = chat.type === 'direct';
-    const text = preview || msg.text || (msg.media ? (msg.media.kind === 'video' ? '🎬 Видео' : '📷 Фото') : '');
+    const media = { video: '🎬 Видео', voice: '🎤 Голосовое', image: '📷 Фото' }[msg.media && msg.media.kind] || (msg.media ? '📎 Вложение' : '');
+    const text = preview || msg.text || (msg.gift ? '🎁 Подарок' : media);
     sendPush(to, { title: direct ? who : chat.name, body: (direct || chat.type === 'channel' && !chat.open ? '' : who + ': ') + text.slice(0, 140), chatId: chat.id, tag: 'chat-' + chat.id });
 }
 app.post('/api/push/subscribe', async (req, res) => {
@@ -554,15 +501,6 @@ app.post('/api/register', async (req, res) => {
     const users = read(F.users);
     if (users.some(u => u.email === email)) return res.status(400).json({ error: 'Этот email уже зарегистрирован' });
     if (handleTaken(users, handle)) return res.status(400).json({ error: 'Этот юзернейм уже занят' });
-    if (EMAIL_VERIFY) {
-        const code = String(req.body.code || '').trim(), p = pendingCodes.get(email);
-        if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Введите 6-значный код из письма' });
-        if (!p || p.exp < Date.now()) return res.status(400).json({ error: 'Код устарел. Запросите новый' });
-        if (++p.tries > 5) { pendingCodes.delete(email); return res.status(400).json({ error: 'Слишком много попыток. Запросите новый код' }); }
-        if (!crypto.timingSafeEqual(p.hash, codeHash(email, code))) return res.status(400).json({ error: 'Неверный код' });
-        pendingCodes.delete(email);
-    }
-
     const user = {
         id: Date.now(), username, handle, email, password: hashPass(password),
         bio: '', avatar: '', mars: START_MARS, createdAt: new Date().toISOString()
@@ -1765,6 +1703,23 @@ const PREMIUM_PLANS = {
 function premiumOn(u) { return !!u.premium && (u.premium === 'forever' || Date.parse(u.premium) > Date.now()); }
 const hexOk = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
 
+// Сообщение в личном чате о подаренной подписке (получатель видит «Вам подарили», покупатель — «Вы подарили»)
+function premMessage(from, to, planKey) {
+    const chats = read(F.chats), id = directId(from, to);
+    let chat = chats.find(c => c.id === id);
+    if (!chat) {
+        chat = { id, type: 'direct', members: [from, to], reads: {}, createdAt: new Date().toISOString() };
+        chats.push(chat);
+        write(F.chats, chats);
+    }
+    const msg = { id: crypto.randomUUID(), chatId: id, senderId: from, text: '', prem: { plan: planKey }, timestamp: new Date().toISOString() };
+    const msgs = read(F.messages);
+    msgs.push(msg);
+    write(F.messages, msgs);
+    sendTo(chat.members, { type: 'message', data: msg });
+    notifyMessage(chat, msg, '💎 Вам подарили подписку SAIMONPREMIYM');
+}
+
 // Купить себе или подарить: списываем Mars у покупателя, продлеваем подписку получателю
 app.post('/api/premium/buy', async (req, res) => {
     const me = req.uid, plan = PREMIUM_PLANS[req.body.plan];
@@ -1781,6 +1736,7 @@ app.post('/api/premium/buy', async (req, res) => {
         return res.status(400).json({ error: `Не хватает Mars: нужно ${plan.price}, у вас ${buyer.mars || 0}` });
 
     if (!isUnlimited(buyer)) buyer.mars -= plan.price;
+    if (toId !== me) premMessage(me, toId, req.body.plan);
     if (target.premium === 'forever') { /* навсегда уже есть */ }
     else if (plan.ms === null) target.premium = 'forever';
     else {
@@ -1885,7 +1841,7 @@ wss.on('connection', ws => {
                 msgs.push(msg);
                 write(F.messages, msgs);
                 sendTo(chat.members, { type: 'message', data: outMsg(msg, chat), cid: m.cid ? String(m.cid).slice(0, 40) : undefined }); // только участникам чата; cid — чтобы отправитель заменил своё временное
-                notifyMessage(chat, msg); сообщение
+                notifyMessage(chat, msg);
 
             } else if (m.type === 'read') {
                 if (chat.type === 'channel' && !chat.open) markViews(chat, uid);
@@ -1988,7 +1944,6 @@ async function init() {
     await persist();
 
     console.log(`💾 Хранилище: ${pool ? 'база данных PostgreSQL' : 'файлы в ' + DIR}`);
-    console.log(EMAIL_VERIFY ? `✉️ Код на почту при регистрации: включён (${MAIL_PROVIDER})` : '✉️ Код на почту: выключен (нет BREVO_API_KEY/RESEND_API_KEY и MAIL_FROM)');
     if (!pool) console.warn('⚠️ DATABASE_URL не задан: данные лежат во временных файлах и пропадут при перезапуске на бесплатном хостинге');
     console.log(`👤 Пользователей: ${read(F.users).length}, база создана: ${meta.createdAt}`);
 }
