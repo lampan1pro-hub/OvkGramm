@@ -251,7 +251,7 @@ const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
     ...((u.handles || [u.handle]).length > 1 ? { others: u.handles.filter(h => h !== u.handle) } : {}),
-    avatar: u.avatar || '', createdAt: u.createdAt, online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc }), ...(u.banned && { banned: true })
+    avatar: u.avatar || '', createdAt: u.createdAt, ...(u.handleBuys && Object.keys(u.handleBuys).length ? { buys: u.handleBuys } : {}), online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc }), ...(u.banned && { banned: true }), ...(premiumOn(u) && { premium: u.premium, ...(u.nickGrad && { ng: u.nickGrad }) })
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u),
     ...(u.uListings && u.uListings.length ? { uListing: u.uListings.find(l => l.handle === u.handle) || u.uListings[0] } : {}) });
@@ -795,6 +795,9 @@ app.post('/api/usernames/buy', async (req, res) => {
     }
     // Добавляем handle покупателю
     buyer.handles.push(sellHandle);
+    // запоминаем цену и дату покупки каждого второстепенного юзернейма (видно в профиле)
+    buyer.handleBuys = buyer.handleBuys || {};
+    buyer.handleBuys[sellHandle] = { price, at: new Date().toISOString() };
     // Активный у покупателя не меняем — новый handle идёт в «а также»
     if (!isUnlimited(buyer)) buyer.mars -= price;
     seller.mars = (seller.mars || 0) + price;
@@ -1749,6 +1752,61 @@ app.get('/api/admin/banned', adminOnly, (req, res) => {
         name: (u.banBackup && u.banBackup.username) || '—',
         reserved: ((u.banBackup && u.banBackup.handles) || []).map(h => '@' + h)
     })));
+});
+
+// ---------- Подписка SAIMONPREMIYM ----------
+// Тарифы: цена в Mars. Подписка дарит цвет ника (градиент) и значок 💎 в профиле.
+const PREMIUM_PLANS = {
+    day:     { price: 50,    ms: 1 * 86400000 },
+    month:   { price: 1200,  ms: 30 * 86400000 },
+    year:    { price: 15000, ms: 365 * 86400000 },
+    forever: { price: 30000, ms: null }
+};
+function premiumOn(u) { return !!u.premium && (u.premium === 'forever' || Date.parse(u.premium) > Date.now()); }
+const hexOk = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+
+// Купить себе или подарить: списываем Mars у покупателя, продлеваем подписку получателю
+app.post('/api/premium/buy', async (req, res) => {
+    const me = req.uid, plan = PREMIUM_PLANS[req.body.plan];
+    if (!plan) return res.status(400).json({ error: 'Неизвестный тариф' });
+    const users = read(F.users);
+    const buyer = users.find(u => u.id === me);
+    const toId = req.body.toId ? Number(req.body.toId) : me;
+    const target = users.find(u => u.id === toId);
+    if (!buyer || !target || target.banned || target.bot || target.fake)
+        return res.status(400).json({ error: 'Получатель не найден' });
+    if (toId !== me && blockedEither(me, toId))
+        return res.status(400).json({ error: 'Нельзя подарить: один из вас заблокировал другого' });
+    if (!isUnlimited(buyer) && (buyer.mars || 0) < plan.price)
+        return res.status(400).json({ error: `Не хватает Mars: нужно ${plan.price}, у вас ${buyer.mars || 0}` });
+
+    if (!isUnlimited(buyer)) buyer.mars -= plan.price;
+    if (target.premium === 'forever') { /* навсегда уже есть */ }
+    else if (plan.ms === null) target.premium = 'forever';
+    else {
+        const base = premiumOn(target) ? Date.parse(target.premium) : Date.now();
+        target.premium = new Date(base + plan.ms).toISOString();
+    }
+    write(F.users, users);
+    sendTo([me], { type: 'wallet', data: walletOf(buyer) });
+    broadcast({ type: 'chat' });
+    await persist();
+    res.json({ success: true, premium: target.premium, ...walletOf(buyer) });
+});
+
+// Цвет ника: градиент из двух цветов, только для активной подписки
+app.put('/api/premium/nick', async (req, res) => {
+    const users = read(F.users), u = users.find(x => x.id === req.uid);
+    if (!u || !premiumOn(u)) return res.status(403).json({ error: 'Нужна подписка SAIMONPREMIYM' });
+    if (req.body.reset) delete u.nickGrad;
+    else {
+        if (!hexOk(req.body.c1) || !hexOk(req.body.c2)) return res.status(400).json({ error: 'Некорректный цвет' });
+        u.nickGrad = [req.body.c1, req.body.c2];
+    }
+    write(F.users, users);
+    broadcast({ type: 'chat' });
+    await persist();
+    res.json({ success: true, nickGrad: u.nickGrad || null });
 });
 
 // ---------- WebSocket ----------
