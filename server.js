@@ -171,11 +171,51 @@ const MIME = {
 const URL_RE = /^\/uploads\/[\w-]+\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|ogg|mp3)$/;
 const fileOk = u => typeof u === 'string' && URL_RE.test(u) && fs.existsSync(path.join(UP, path.basename(u)));
 
+// Не даём больше N перекодирований выполняться одновременно: на маленьком бесплатном хостинге
+// 2-3 параллельных ffmpeg на 4K-видео съедают всю память и роняют сам Node-процесс
+// (а с ним — сессии и логин всех пользователей, если нет DATABASE_URL).
+const TRANSCODE_LIMIT = 1;
+let transcodeActive = 0;
+const transcodeQueue = [];
+function withTranscodeSlot(fn) {
+    return new Promise((resolve, reject) => {
+        const run = async () => {
+            transcodeActive++;
+            try { resolve(await fn()); }
+            catch (e) { reject(e); }
+            finally {
+                transcodeActive--;
+                const next = transcodeQueue.shift();
+                if (next) next();
+            }
+        };
+        if (transcodeActive < TRANSCODE_LIMIT) run(); else transcodeQueue.push(run);
+    });
+}
+
+// Узнаём длительность и разрешение ДО перекодирования — чтобы отсеять аномально большие/длинные
+// файлы коротким и понятным отказом, а не часовой перекодировкой, вешающей сервер.
+function probeMedia(tmpIn) {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(tmpIn, (err, data) => {
+            if (err) return reject(err);
+            const v = (data.streams || []).find(s => s.codec_type === 'video');
+            resolve({
+                duration: Number(data.format?.duration) || 0,
+                width: v ? Number(v.width) || 0 : 0,
+                height: v ? Number(v.height) || 0 : 0
+            });
+        });
+    });
+}
+
 // Приводим ЛЮБОЕ загруженное аудио/видео к одному формату: AAC в .m4a (голос) или H.264+AAC в .mp4 (видео).
 // Это главное: Android обычно пишет голосовые в WebM/Opus, а Safari на iPhone WebM вообще не проигрывает
 // (ни звук, ни видео) — без перекодирования такие файлы «не открываются» именно на iPhone.
+// Видео всегда ужимаем минимум до 854px по длинной стороне: мессенджеру не нужно родное 4K с телефона
+// (бывает 50+ Мбит/с) — перекодировать такое на слабом сервере и долго, и прожорливо по памяти.
 function transcodeToCompat(buf, srcExt, isVideo) {
-    return new Promise(async (resolve, reject) => {
+    return withTranscodeSlot(() => new Promise(async (resolve, reject) => {
         const tmpIn = path.join(os.tmpdir(), `in-${crypto.randomUUID()}.${srcExt}`);
         const tmpOut = path.join(os.tmpdir(), `out-${crypto.randomUUID()}.${isVideo ? 'mp4' : 'm4a'}`);
         const cleanup = () => { fs.unlink(tmpIn, () => {}); fs.unlink(tmpOut, () => {}); };
@@ -183,18 +223,26 @@ function transcodeToCompat(buf, srcExt, isVideo) {
             await fs.promises.writeFile(tmpIn, buf);
         } catch (e) { cleanup(); return reject(e); }
 
+        if (isVideo) {
+            try {
+                const meta = await probeMedia(tmpIn);
+                if (meta.duration > 300) { cleanup(); return reject(new Error('Видео длиннее 5 минут')); }
+            } catch { /* если пробник не смог прочитать метаданные — просто пробуем перекодировать как есть */ }
+        }
+
         const cmd = ffmpeg(tmpIn).audioCodec('aac');
         if (isVideo) {
-            cmd.videoCodec('libx264').audioBitrate('128k')
+            cmd.videoCodec('libx264').audioBitrate('96k')
                 .outputOptions([
-                    '-preset veryfast', '-crf 23', '-pix_fmt yuv420p', '-movflags +faststart',
-                    "-vf scale='min(1280,iw)':-2" // не увеличиваем, только ужимаем крупное видео; -2 держит чётную высоту
+                    '-preset veryfast', '-crf 26', '-pix_fmt yuv420p', '-movflags +faststart',
+                    '-threads 2', // жёстко ограничиваем потоки — иначе ffmpeg на многоядерном хосте сам раздувает память
+                    "-vf scale='min(854,iw)':-2:force_original_aspect_ratio=decrease" // мессенджеру достаточно 854px по широкой стороне
                 ]);
         } else {
-            cmd.noVideo().audioChannels(1).audioBitrate('96k').outputOptions(['-movflags +faststart']);
+            cmd.noVideo().audioChannels(1).audioBitrate('96k').outputOptions(['-movflags +faststart', '-threads 1']);
         }
         // Подстраховка от зависшего ffmpeg на «тяжёлом» файле
-        const killT = setTimeout(() => { try { cmd.kill('SIGKILL'); } catch {} }, isVideo ? 120000 : 30000);
+        const killT = setTimeout(() => { try { cmd.kill('SIGKILL'); } catch {} }, isVideo ? 90000 : 30000);
         cmd.on('error', err => { clearTimeout(killT); cleanup(); reject(err); })
             .on('end', async () => {
                 clearTimeout(killT);
@@ -205,7 +253,7 @@ function transcodeToCompat(buf, srcExt, isVideo) {
                 } catch (e) { cleanup(); reject(e); }
             })
             .save(tmpOut);
-    });
+    }));
 }
 const kindOf = u => /\.(mp4|webm|mov)$/.test(u) ? 'video' : /\.(weba|m4a|ogg|mp3)$/.test(u) ? 'voice' : 'image';
 const imageOk = u => fileOk(u) && kindOf(u) === 'image';
@@ -416,7 +464,9 @@ app.post('/api/upload', express.raw({ type: () => true, limit: '50mb' }), async 
             ext = isVideo ? 'mp4' : 'm4a';
         } catch (e) {
             console.error('transcode:', e.message);
-            return res.status(400).json({ error: isVideo ? 'Не удалось обработать видео' : 'Не удалось обработать голосовое сообщение' });
+            const friendly = e.message === 'Видео длиннее 5 минут' ? e.message
+                : (isVideo ? 'Не удалось обработать видео' : 'Не удалось обработать голосовое сообщение');
+            return res.status(400).json({ error: friendly });
         }
     }
 
