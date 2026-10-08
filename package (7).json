@@ -1,0 +1,24 @@
+{
+  "name": "saimongram",
+  "version": "2.0.0",
+  "description": "SAIMONGRAM - мессенджер с каналами, NFT и валютой Mars",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["messenger", "chat", "websocket"],
+  "author": "OVKGRAMM",
+  "license": "MIT",
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "fluent-ffmpeg": "^2.1.3",
+    "pg": "^8.11.3",
+    "ws": "^8.13.0"
+  }
+}
