@@ -342,7 +342,7 @@ const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
     ...((u.handles || [u.handle]).length > 1 ? { others: u.handles.filter(h => h !== u.handle) } : {}),
-    avatar: u.avatar || '', createdAt: u.createdAt, ...(u.handleBuys && Object.keys(u.handleBuys).length ? { buys: u.handleBuys } : {}), online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc }), ...(u.pinnedChannel ? { pinnedChannel: u.pinnedChannel } : {}), ...(u.banned && { banned: true }), ...(u.rainbowBorder && premiumOn(u) && { rainbowBorder: true }), ...(u.pinnedChannel && { pinnedChannel: u.pinnedChannel }), ...(premiumOn(u) && { premium: u.premium, ...(u.nickGrad && { ng: u.nickGrad }) })
+    avatar: u.avatar || '', createdAt: u.createdAt, ...(u.handleBuys && Object.keys(u.handleBuys).length ? { buys: u.handleBuys } : {}), online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc }), ...(u.banned && { banned: true }), ...(u.rainbowBorder && premiumOn(u) && { rainbowBorder: true }), ...(u.pinnedChannel && { pinnedChannel: u.pinnedChannel }), ...(premiumOn(u) && { premium: u.premium, ...(u.nickGrad && { ng: u.nickGrad }) })
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u),
     ...(u.uListings && u.uListings.length ? { uListing: u.uListings.find(l => l.handle === u.handle) || u.uListings[0] } : {}),
@@ -1880,6 +1880,16 @@ app.put('/api/premium/nick', async (req, res) => {
 });
 
 // Переливающаяся рамка (только для премиум-пользователей)
+app.put('/api/premium/rainbow/gift/:targetId', async (req, res) => {
+    if (!isAdminUid(req.uid)) return res.status(403).json({ error: 'Нет прав' });
+    const users = read(F.users), u = users.find(x => x.id === req.params.targetId);
+    if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (!u.premium) return res.status(400).json({ error: 'У пользователя нет премиума' });
+    u.rainbowBorder = !!req.body.on;
+    write(F.users, users); await persist();
+    res.json({ success: true, rainbowBorder: u.rainbowBorder });
+});
+
 app.put('/api/premium/rainbow', async (req, res) => {
     const users = read(F.users), u = users.find(x => x.id === req.uid);
     if (!u || !premiumOn(u)) return res.status(403).json({ error: 'Нужна подписка SAIMONPREMIYM' });
