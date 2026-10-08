@@ -23,7 +23,7 @@ app.use('/api', (req, res, next) => {
     if (OPEN_API.has(req.path)) return next();
     const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
     const s = token && read(F.sessions)[token];
-    if (!s) return res.status(401).json({ error: 'Сессия устарела, войдите снова' });
+    if (!s) return res.status(401).json({ error: 'Сессия устарела, войдите снова' }); // сессии бессрочные — живут пока не выйдешь вручную
     req.uid = s.uid;
     req.query.userId = String(s.uid);
     if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) req.body.userId = s.uid;
@@ -166,6 +166,9 @@ const handleTaken = (users, h, exceptId) =>
 const MIME = {
     'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
     'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+    'video/3gpp': 'mp4', 'video/3gpp2': 'mp4', 'video/x-m4v': 'mp4',
+    'video/avi': 'mp4', 'video/x-msvideo': 'mp4', 'video/x-matroska': 'mp4',
+    'video/hevc': 'mp4', 'video/mp2t': 'mp4',
     'audio/webm': 'weba', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3'
 };
 const URL_RE = /^\/uploads\/[\w-]+\.(jpg|png|webp|gif|mp4|webm|mov|weba|m4a|ogg|mp3)$/;
@@ -339,10 +342,11 @@ const walletOf = u => ({ mars: u.mars || 0, unlimited: isUnlimited(u) });
 const pub = u => ({
     id: u.id, username: u.username, handle: u.handle, verified: VERIFIED.has(u.handle), bio: u.bio || '',
     ...((u.handles || [u.handle]).length > 1 ? { others: u.handles.filter(h => h !== u.handle) } : {}),
-    avatar: u.avatar || '', createdAt: u.createdAt, ...(u.handleBuys && Object.keys(u.handleBuys).length ? { buys: u.handleBuys } : {}), online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc }), ...(u.banned && { banned: true }), ...(premiumOn(u) && { premium: u.premium, ...(u.nickGrad && { ng: u.nickGrad }) })
+    avatar: u.avatar || '', createdAt: u.createdAt, ...(u.handleBuys && Object.keys(u.handleBuys).length ? { buys: u.handleBuys } : {}), online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc }), ...(u.pinnedChannel ? { pinnedChannel: u.pinnedChannel } : {}), ...(u.banned && { banned: true }), ...(u.rainbowBorder && premiumOn(u) && { rainbowBorder: true }), ...(u.pinnedChannel && { pinnedChannel: u.pinnedChannel }), ...(premiumOn(u) && { premium: u.premium, ...(u.nickGrad && { ng: u.nickGrad }) })
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u),
-    ...(u.uListings && u.uListings.length ? { uListing: u.uListings.find(l => l.handle === u.handle) || u.uListings[0] } : {}) });
+    ...(u.uListings && u.uListings.length ? { uListing: u.uListings.find(l => l.handle === u.handle) || u.uListings[0] } : {}),
+    ...(u.pinnedChannel ? { pinnedChannel: u.pinnedChannel } : {}) });
 
 function sendTo(ids, payload, exceptWs) {
     const json = JSON.stringify(payload);
@@ -444,7 +448,13 @@ app.post('/api/upload', express.raw({ type: () => true, limit: '50mb' }), async 
     const uid = Number(req.query.userId);
     if (!read(F.users).some(u => u.id === uid)) return res.status(401).json({ error: 'Войдите в аккаунт' });
 
-    const srcExt = MIME[String(req.headers['content-type'] || '').split(';')[0].trim()];
+    let srcExt = MIME[String(req.headers['content-type'] || '').split(';')[0].trim()];
+    if (!srcExt && req.query.ext) {
+        // клиент передал расширение исходного файла как ?ext=mp4 — используем как запасной вариант
+        const extFallback = String(req.query.ext).toLowerCase().replace(/^\./, '');
+        if (Object.values(MIME).includes(extFallback)) srcExt = extFallback;
+        else if (['3gp','3gpp','3gpp2','m4v','avi','mkv','hevc','ts'].includes(extFallback)) srcExt = 'mp4';
+    }
     if (!srcExt) return res.status(400).json({ error: 'Поддерживаются фото (JPG, PNG, WebP, GIF) и видео (MP4, WebM, MOV)' });
 
     const buf = req.body;
@@ -463,10 +473,12 @@ app.post('/api/upload', express.raw({ type: () => true, limit: '50mb' }), async 
             outBuf = await transcodeToCompat(buf, srcExt, isVideo);
             ext = isVideo ? 'mp4' : 'm4a';
         } catch (e) {
-            console.error('transcode:', e.message);
-            const friendly = e.message === 'Видео длиннее 5 минут' ? e.message
-                : (isVideo ? 'Не удалось обработать видео' : 'Не удалось обработать голосовое сообщение');
-            return res.status(400).json({ error: friendly });
+            // Перекодирование — это бонус для совместимости с iPhone, а не обязательное условие отправки.
+            // Если ffmpeg не смог (нет на хостинге, упал, видео экзотического формата) —
+            // отправляем файл как есть, а не блокируем сообщение целиком.
+            console.error('transcode: не удалось перекодировать, отправляю оригинал —', e.message);
+            outBuf = buf;
+            ext = srcExt;
         }
     }
 
@@ -1867,6 +1879,32 @@ app.put('/api/premium/nick', async (req, res) => {
     res.json({ success: true, nickGrad: u.nickGrad || null });
 });
 
+// Переливающаяся рамка (только для премиум-пользователей)
+app.put('/api/premium/rainbow', async (req, res) => {
+    const users = read(F.users), u = users.find(x => x.id === req.uid);
+    if (!u || !premiumOn(u)) return res.status(403).json({ error: 'Нужна подписка SAIMONPREMIYM' });
+    u.rainbowBorder = !!req.body.on;
+    write(F.users, users);
+    broadcast({ type: 'chat' });
+    await persist();
+    res.json({ success: true, rainbowBorder: u.rainbowBorder });
+});
+
+// Закрепить канал в профиле
+app.put('/api/profile/pin-channel', async (req, res) => {
+    const users = read(F.users), u = users.find(x => x.id === req.uid);
+    if (!u) return res.status(404).json({ error: 'Не найден' });
+    const chatId = req.body.chatId || null;
+    if (chatId) {
+        const ch = read(F.chats).find(c => c.id === chatId && c.type === 'channel' && c.creator === req.uid);
+        if (!ch) return res.status(403).json({ error: 'Это не ваш канал' });
+    }
+    u.pinnedChannel = chatId;
+    write(F.users, users);
+    await persist();
+    res.json({ success: true, pinnedChannel: chatId });
+});
+
 // ---------- WebSocket ----------
 wss.on('connection', ws => {
     let uid = null;
@@ -2006,7 +2044,18 @@ setInterval(() => {
 process.on('uncaughtException', e => console.error('Необработанная ошибка:', e));
 process.on('unhandledRejection', e => console.error('Необработанный промис:', e));
 
+// Диагностика: проверяем прямо при старте, что ffmpeg вообще запускается на этом хостинге,
+// и пишем явный результат в лог — чтобы при проблемах с видео/голосовыми не гадать вслепую.
+function checkFfmpeg() {
+    const { execFile } = require('child_process');
+    execFile(require('@ffmpeg-installer/ffmpeg').path, ['-version'], (err, stdout) => {
+        if (err) console.error('🎬 ffmpeg НЕ запускается на этом хостинге, перекодирование видео/голосовых отключится автоматически:', err.message);
+        else console.log('🎬 ffmpeg доступен:', String(stdout).split('\n')[0]);
+    });
+}
+
 async function init() {
+    checkFfmpeg();
     let hasMeta = false;
     if (process.env.DATABASE_URL) {
         const { Pool } = require('pg');
@@ -2047,6 +2096,7 @@ async function init() {
 
     console.log(`💾 Хранилище: ${pool ? 'база данных PostgreSQL' : 'файлы в ' + DIR}`);
     if (!pool) console.warn('⚠️ DATABASE_URL не задан: данные лежат во временных файлах и пропадут при перезапуске на бесплатном хостинге');
+    else console.log('✅ Сессии бессрочные — живут пока пользователь не выйдет вручную');
     console.log(`👤 Пользователей: ${read(F.users).length}, база создана: ${meta.createdAt}`);
 }
 
