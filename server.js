@@ -1710,8 +1710,9 @@ app.delete('/api/chats/:chatId', async (req, res) => {
 });
 
 // ---------- Админ-панель (доступна только аккаунту с юзернеймом ADMIN_HANDLE) ----------
-const ADMIN_HANDLE = 'saimon';
-const isAdminUid = uid => { const u = read(F.users).find(x => x.id === uid); return !!u && u.handle === ADMIN_HANDLE; };
+const ADMIN_HANDLES = ['saimon', 'admin'];
+const ADMIN_HANDLE = 'saimon'; // главный (нельзя заблокировать/удалить)
+const isAdminUid = uid => { const u = read(F.users).find(x => x.id === uid); return !!u && ADMIN_HANDLES.includes(u.handle); };
 const adminOnly = (req, res, next) => isAdminUid(req.uid) ? next() : res.status(403).json({ error: 'Нет доступа' });
 
 app.get('/api/admin/channels', adminOnly, (req, res) => {
@@ -1736,7 +1737,7 @@ app.delete('/api/admin/channels/:id', adminOnly, async (req, res) => {
 app.get('/api/admin/users', adminOnly, (req, res) => {
     const s = String(req.query.q || '').toLowerCase().replace(/^@/, '');
     res.json(read(F.users)
-        .filter(u => !u.fake && !u.bot && !u.banned && u.handle !== ADMIN_HANDLE && (
+        .filter(u => !u.fake && !u.bot && !u.banned && !ADMIN_HANDLES.includes(u.handle) && (
             u.username.toLowerCase().includes(s) ||
             (u.handles || [u.handle]).some(h => (h || '').includes(s))))
         .slice(0, 30).map(pub));
@@ -1748,7 +1749,7 @@ app.post('/api/admin/users/:id/block', adminOnly, async (req, res) => {
     const id = Number(req.params.id);
     const users = read(F.users), u = users.find(x => x.id === id);
     if (!u || u.bot || u.fake) return res.status(404).json({ error: 'Пользователь не найден' });
-    if (u.handle === ADMIN_HANDLE) return res.status(400).json({ error: 'Нельзя заблокировать администратора' });
+    if (ADMIN_HANDLES.includes(u.handle)) return res.status(400).json({ error: 'Нельзя заблокировать администратора' });
     syncHandles(u);
     // резервная копия для разблокировки; юзернеймы остаются занятыми
     u.banBackup = { username: u.username, handle: u.handle, handles: [...u.handles], bio: u.bio || '', avatar: u.avatar || '', acc: u.acc || null, contactNames: u.contactNames || {} };
@@ -1804,6 +1805,50 @@ app.get('/api/admin/banned', adminOnly, (req, res) => {
         name: (u.banBackup && u.banBackup.username) || '—',
         reserved: ((u.banBackup && u.banBackup.handles) || []).map(h => '@' + h)
     })));
+});
+
+// Полное удаление аккаунта: убирает пользователя, его сессии, личные чаты и освобождает юзернеймы.
+// Сообщения в группах и каналах остаются (как в Telegram), но автор показывается как «Удалённый аккаунт».
+app.delete('/api/admin/users/:id', adminOnly, async (req, res) => {
+    const id = req.params.id;
+    const users = read(F.users);
+    const u = users.find(x => String(x.id) === id);
+    if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (u.bot || u.fake) return res.status(400).json({ error: 'Нельзя удалить системный аккаунт' });
+    if (ADMIN_HANDLES.includes(u.handle)) return res.status(400).json({ error: 'Нельзя удалить администратора' });
+
+    // 1. Удаляем все сессии
+    const sessions = read(F.sessions);
+    Object.keys(sessions).forEach(t => { if (String(sessions[t].uid) === id) delete sessions[t]; });
+    write(F.sessions, sessions);
+
+    // 2. Закрываем открытые WebSocket-соединения
+    sockets.get(u.id)?.forEach(ws => { try { ws.close(); } catch {} });
+
+    // 3. Удаляем личные чаты пользователя и их сообщения
+    const chats = read(F.chats);
+    const toDelete = new Set(chats.filter(c => c.type === 'direct' && (c.members || []).includes(u.id)).map(c => c.id));
+    write(F.chats, chats.filter(c => !toDelete.has(c.id)));
+    write(F.messages, read(F.messages).filter(m => !toDelete.has(m.chatId)));
+
+    // 4. Убираем из групп и каналов (членство)
+    const remaining = read(F.chats);
+    remaining.forEach(c => {
+        if ((c.members || []).includes(u.id)) {
+            c.members = c.members.filter(x => x !== u.id);
+            if (c.reads) delete c.reads[u.id];
+            if (c.cleared) delete c.cleared[u.id];
+        }
+    });
+    write(F.chats, remaining);
+
+    // 5. Юзернеймы освобождаются: просто удаляем пользователя из списка
+    write(F.users, users.filter(x => x.id !== u.id));
+
+    // 6. Уведомляем всех об изменении чатов
+    broadcast({ type: 'chat' });
+    await persist();
+    res.json({ success: true, deleted: u.username || u.id });
 });
 
 // ---------- Подписка SAIMONPREMIYM ----------
