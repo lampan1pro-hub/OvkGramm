@@ -1859,7 +1859,14 @@ app.delete('/api/admin/users/:id', adminOnly, async (req, res) => {
 
     write(F.chats,    newChats);
     write(F.messages, newMsgs);
-    write(F.blocks,   read(F.blocks).filter(b => b.from !== u.id && b.to !== u.id));
+    const blks = read(F.blocks);
+    const newBlks = {};
+    for (const [uid, ids] of Object.entries(blks)) {
+        if (String(uid) === String(u.id)) continue;
+        const filtered = (ids || []).filter(id => String(id) !== String(u.id));
+        if (filtered.length) newBlks[uid] = filtered;
+    }
+    write(F.blocks, newBlks);
     write(F.gifts,    read(F.gifts).filter(g => g.ownerId !== u.id && g.senderId !== u.id));
     write(F.users,    users.filter(x => x.id !== u.id));
 
