@@ -1710,7 +1710,7 @@ app.delete('/api/chats/:chatId', async (req, res) => {
 });
 
 // ---------- Админ-панель (доступна только аккаунту с юзернеймом ADMIN_HANDLE) ----------
-const ADMIN_HANDLES = ['saimon', 'admin'];
+const ADMIN_HANDLES = ['saimon'];
 const ADMIN_HANDLE = 'saimon'; // главный (нельзя заблокировать/удалить)
 const isAdminUid = uid => { const u = read(F.users).find(x => x.id === uid); return !!u && ADMIN_HANDLES.includes(u.handle); };
 const adminOnly = (req, res, next) => isAdminUid(req.uid) ? next() : res.status(403).json({ error: 'Нет доступа' });
