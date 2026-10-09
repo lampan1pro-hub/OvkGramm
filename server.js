@@ -1825,48 +1825,43 @@ app.delete('/api/admin/users/:id', adminOnly, async (req, res) => {
     // 2. Закрываем открытые WebSocket-соединения
     sockets.get(u.id)?.forEach(ws => { try { ws.close(); } catch {} });
 
-    // 3. Удаляем личные чаты пользователя и их сообщения
-    const chats = read(F.chats);
-    const toDelete = new Set(chats.filter(c => c.type === 'direct' && (c.members || []).includes(u.id)).map(c => c.id));
-    write(F.chats, chats.filter(c => !toDelete.has(c.id)));
-    write(F.messages, read(F.messages).filter(m => !toDelete.has(m.chatId)));
+    // 3–9. Атомарно удаляем все данные пользователя за один проход
+    const allChats = read(F.chats);
+    const allMsgs  = read(F.messages);
 
-    // 4. Убираем из групп и каналов (членство)
-    const remaining = read(F.chats);
-    remaining.forEach(c => {
-        if ((c.members || []).includes(u.id)) {
-            c.members = c.members.filter(x => x !== u.id);
-            if (c.reads) delete c.reads[u.id];
-            if (c.cleared) delete c.cleared[u.id];
-        }
-    });
-    write(F.chats, remaining);
+    // ID личных чатов пользователя (удаляются целиком)
+    const directIds = new Set(
+        allChats.filter(c => c.type === 'direct' && (c.members || []).includes(u.id)).map(c => c.id)
+    );
+    // ID всех сообщений пользователя (для снятия закреплений)
+    const userMsgIds = new Set(
+        allMsgs.filter(m => String(m.senderId) === id).map(m => m.id)
+    );
 
-    // 5. Удаляем все сообщения пользователя во всех публичных чатах
-    //    (полное удаление — не как в Telegram, а как просил пользователь)
-    const msgs = read(F.messages);
-    const userMsgIds = new Set(msgs.filter(m => m.senderId === u.id).map(m => m.id));
-    write(F.messages, msgs.filter(m => m.senderId !== u.id));
+    // Чаты: удаляем личные, из остальных убираем членство и чистим закреплённые сообщения
+    const newChats = allChats
+        .filter(c => !directIds.has(c.id))
+        .map(c => {
+            if (!(c.members || []).includes(u.id) && !c.pin && !c.pins) return c;
+            const nc = { ...c };
+            if ((nc.members || []).includes(u.id)) {
+                nc.members = nc.members.filter(x => x !== u.id);
+                if (nc.reads)   { nc.reads   = { ...nc.reads };   delete nc.reads[u.id]; }
+                if (nc.cleared) { nc.cleared = { ...nc.cleared }; delete nc.cleared[u.id]; }
+            }
+            if (nc.pin  && userMsgIds.has(nc.pin.id))  delete nc.pin;
+            if (nc.pins) nc.pins = nc.pins.filter(pid => !userMsgIds.has(pid));
+            return nc;
+        });
 
-    // 6. Снимаем закреплённые сообщения пользователя в чатах
-    const chats2 = read(F.chats);
-    chats2.forEach(c => {
-        if (c.pin && userMsgIds.has(c.pin.id)) delete c.pin;
-        if (c.pins) c.pins = c.pins.filter(id => !userMsgIds.has(id));
-    });
-    write(F.chats, chats2);
+    // Сообщения: удаляем личные чаты + все сообщения пользователя
+    const newMsgs = allMsgs.filter(m => !directIds.has(m.chatId) && String(m.senderId) !== id);
 
-    // 7. Удаляем блокировки (где пользователь блокировал или был заблокирован)
-    const blocks = read(F.blocks);
-    write(F.blocks, blocks.filter(b => b.from !== u.id && b.to !== u.id));
-
-    // 8. Удаляем подарки пользователя
-    const gifts = read(F.gifts);
-    write(F.gifts, gifts.filter(g => g.ownerId !== u.id && g.senderId !== u.id));
-
-    // 9. Удаляем листинги юзернеймов других пользователей купленных этим пользователем
-    //    и освобождаем юзернеймы: просто удаляем пользователя из списка
-    write(F.users, users.filter(x => x.id !== u.id));
+    write(F.chats,    newChats);
+    write(F.messages, newMsgs);
+    write(F.blocks,   read(F.blocks).filter(b => b.from !== u.id && b.to !== u.id));
+    write(F.gifts,    read(F.gifts).filter(g => g.ownerId !== u.id && g.senderId !== u.id));
+    write(F.users,    users.filter(x => x.id !== u.id));
 
     // 10. Уведомляем всех об изменении чатов
     broadcast({ type: 'chat' });
