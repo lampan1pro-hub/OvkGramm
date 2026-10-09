@@ -1860,7 +1860,14 @@ app.delete('/api/admin/users/:id', adminOnly, async (req, res) => {
 
     write(F.chats,    newChats);
     write(F.messages, newMsgs);
-    write(F.blocks,   read(F.blocks).filter(b => b.from !== u.id && b.to !== u.id));
+    const blksRaw = read(F.blocks);
+    const newBlks = {};
+    for (const [uid, ids] of Object.entries(blksRaw)) {
+        if (String(uid) === String(u.id)) continue;
+        const filtered = (Array.isArray(ids) ? ids : []).filter(id => String(id) !== String(u.id));
+        if (filtered.length) newBlks[uid] = filtered;
+    }
+    write(F.blocks, newBlks);
     write(F.gifts,    read(F.gifts).filter(g => g.ownerId !== u.id && g.senderId !== u.id));
     write(F.users,    users.filter(x => x.id !== u.id));
 
@@ -1996,7 +2003,7 @@ app.put('/api/profile/pin-channel', async (req, res) => {
     if (!u) return res.status(404).json({ error: 'Не найден' });
     const chatId = req.body.chatId || null;
     if (chatId) {
-        const ch = read(F.chats).find(c => c.id === chatId && c.type === 'channel' && c.creator === req.uid);
+        const ch = read(F.chats).find(c => c.id === chatId && c.type === 'channel' && String(c.creator) === String(req.uid));
         if (!ch) return res.status(403).json({ error: 'Это не ваш канал' });
     }
     u.pinnedChannel = chatId;
