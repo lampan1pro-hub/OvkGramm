@@ -345,7 +345,8 @@ const pub = u => ({
     avatar: u.avatar || '', createdAt: u.createdAt, ...(u.handleBuys && Object.keys(u.handleBuys).length ? { buys: u.handleBuys } : {}), online: sockets.has(u.id), ...(u.bot && { bot: true }), ...(u.acc && { acc: u.acc }), ...(u.banned && { banned: true }), ...(u.rainbowBorder && premiumOn(u) && { rainbowBorder: true }), ...(u.rbColors && u.rainbowBorder ? { rbColors: u.rbColors } : {}), ...(u.pinnedChannel && { pinnedChannel: u.pinnedChannel }), ...(premiumOn(u) && { premium: u.premium, ...(u.nickGrad && { ng: u.nickGrad }) })
 });
 const self = u => ({ ...pub(u), email: u.email, ...walletOf(u),
-    ...(u.uListings && u.uListings.length ? { uListing: u.uListings.find(l => l.handle === u.handle) || u.uListings[0] } : {}),
+    ...(u.uListings && u.uListings.length ? { uListings: u.uListings, uListing: u.uListings.find(l => l.handle === u.handle) } : {}),
+    ...(u.handles && u.handles.length > 1 ? { handles: u.handles } : {}),
     ...(u.pinnedChannel ? { pinnedChannel: u.pinnedChannel } : {}), ...(u.rbColors ? { rbColors: u.rbColors } : {}) });
 
 function sendTo(ids, payload, exceptWs) {
@@ -845,8 +846,8 @@ app.post('/api/usernames/buy', async (req, res) => {
             seller.handles = [seller.handle];
         }
     }
-    // Добавляем handle покупателю
-    buyer.handles.push(sellHandle);
+    // Добавляем handle покупателю (без дублей)
+    if (!buyer.handles.includes(sellHandle)) buyer.handles.push(sellHandle);
     // запоминаем цену и дату покупки каждого второстепенного юзернейма (видно в профиле)
     buyer.handleBuys = buyer.handleBuys || {};
     buyer.handleBuys[sellHandle] = { price, at: new Date().toISOString() };
