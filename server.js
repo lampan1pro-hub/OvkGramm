@@ -330,7 +330,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, storage: pool ? 'datab
 const sockets = new Map(); // userId -> Set<ws>
 
 // Галочка у аккаунтов с этими юзернеймами. Свой список: VERIFIED_HANDLES=saimon,durov,lesha
-const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,durov,lesha,anna')
+const VERIFIED = new Set((process.env.VERIFIED_HANDLES || 'saimon,admin,lesha,anna')
     .split(',').map(x => x.trim().replace(/^@/, '').toLowerCase()).filter(Boolean));
 
 // Бесконечные Mars. Свой список: UNLIMITED_MARS_HANDLES=saimon,другой
@@ -1859,14 +1859,7 @@ app.delete('/api/admin/users/:id', adminOnly, async (req, res) => {
 
     write(F.chats,    newChats);
     write(F.messages, newMsgs);
-    const blks = read(F.blocks);
-    const newBlks = {};
-    for (const [uid, ids] of Object.entries(blks)) {
-        if (String(uid) === String(u.id)) continue;
-        const filtered = (ids || []).filter(id => String(id) !== String(u.id));
-        if (filtered.length) newBlks[uid] = filtered;
-    }
-    write(F.blocks, newBlks);
+    write(F.blocks,   read(F.blocks).filter(b => b.from !== u.id && b.to !== u.id));
     write(F.gifts,    read(F.gifts).filter(g => g.ownerId !== u.id && g.senderId !== u.id));
     write(F.users,    users.filter(x => x.id !== u.id));
 
@@ -1874,6 +1867,21 @@ app.delete('/api/admin/users/:id', adminOnly, async (req, res) => {
     broadcast({ type: 'chat' });
     await persist();
     res.json({ success: true, deleted: u.username || u.id });
+});
+
+
+// Выдача / снятие верификации (галочки) администратором
+app.post('/api/admin/users/:id/verify', adminOnly, async (req, res) => {
+    const users = read(F.users);
+    const u = users.find(x => String(x.id) === req.params.id);
+    if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (VERIFIED.has(u.handle)) {
+        VERIFIED.delete(u.handle);
+    } else {
+        VERIFIED.add(u.handle);
+    }
+    broadcast({ type: 'chat' });
+    res.json({ success: true, verified: VERIFIED.has(u.handle), handle: u.handle });
 });
 
 // ---------- Подписка SAIMONPREMIYM ----------
