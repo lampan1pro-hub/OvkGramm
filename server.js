@@ -680,6 +680,42 @@ app.get('/api/profile/:id', (req, res) => {
     res.json(pub(u));
 });
 
+// ВАЖНО: все маршруты с КОНКРЕТНЫМ путём после /api/profile/ (password, pin-channel и т.п.)
+// должны быть зарегистрированы РАНЬШЕ общего /api/profile/:id — иначе Express сопоставит их
+// с этим общим маршрутом (id = "password" / "pin-channel"), Number(id) превратится в NaN,
+// и запрос всегда будет падать с «Нет доступа», так и не дойдя до нужного обработчика.
+
+// Смена пароля: требуем текущий пароль, чтобы кто-то с открытой сессией на чужом устройстве
+// не мог тихо увести аккаунт себе
+app.put('/api/profile/password', async (req, res) => {
+    const users = read(F.users), u = users.find(x => x.id === req.uid);
+    if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
+    const current = String(req.body.currentPassword || '');
+    const next = String(req.body.newPassword || '');
+    if (!checkPass(current, u.password)) return res.status(400).json({ error: 'Текущий пароль неверен' });
+    if (next.length < 6) return res.status(400).json({ error: 'Новый пароль — минимум 6 символов' });
+    if (next === current) return res.status(400).json({ error: 'Новый пароль совпадает со старым' });
+    u.password = hashPass(next);
+    write(F.users, users);
+    await persist();
+    res.json({ success: true });
+});
+
+// Закрепить канал в профиле
+app.put('/api/profile/pin-channel', async (req, res) => {
+    const users = read(F.users), u = users.find(x => x.id === req.uid);
+    if (!u) return res.status(404).json({ error: 'Не найден' });
+    const chatId = req.body.chatId || null;
+    if (chatId) {
+        const ch = read(F.chats).find(c => c.id === chatId && c.type === 'channel' && String(c.creator) === String(req.uid));
+        if (!ch) return res.status(403).json({ error: 'Это не ваш канал' });
+    }
+    u.pinnedChannel = chatId;
+    write(F.users, users);
+    await persist();
+    res.json({ success: true, pinnedChannel: chatId });
+});
+
 app.put('/api/profile/:id', (req, res) => {
     if (Number(req.params.id) !== req.uid) return res.status(403).json({ error: 'Нет доступа' });
     const users = read(F.users);
@@ -707,22 +743,6 @@ app.put('/api/profile/:id', (req, res) => {
     write(F.users, users);
     broadcast({ type: 'chat' }); // у всех обновятся имена и аватарки
     res.json({ success: true, user: self(u) });
-});
-
-// Смена пароля: требуем текущий пароль, чтобы кто-то с открытой сессией на чужом устройстве
-// не мог тихо увести аккаунт себе
-app.put('/api/profile/password', async (req, res) => {
-    const users = read(F.users), u = users.find(x => x.id === req.uid);
-    if (!u) return res.status(404).json({ error: 'Пользователь не найден' });
-    const current = String(req.body.currentPassword || '');
-    const next = String(req.body.newPassword || '');
-    if (!checkPass(current, u.password)) return res.status(400).json({ error: 'Текущий пароль неверен' });
-    if (next.length < 6) return res.status(400).json({ error: 'Новый пароль — минимум 6 символов' });
-    if (next === current) return res.status(400).json({ error: 'Новый пароль совпадает со старым' });
-    u.password = hashPass(next);
-    write(F.users, users);
-    await persist();
-    res.json({ success: true });
 });
 
 // ---------- Рынок юзернеймов ----------
@@ -2019,21 +2039,6 @@ app.put('/api/premium/rainbow', async (req, res) => {
     broadcast({ type: 'chat' });
     await persist();
     res.json({ success: true, rainbowBorder: u.rainbowBorder });
-});
-
-// Закрепить канал в профиле
-app.put('/api/profile/pin-channel', async (req, res) => {
-    const users = read(F.users), u = users.find(x => x.id === req.uid);
-    if (!u) return res.status(404).json({ error: 'Не найден' });
-    const chatId = req.body.chatId || null;
-    if (chatId) {
-        const ch = read(F.chats).find(c => c.id === chatId && c.type === 'channel' && String(c.creator) === String(req.uid));
-        if (!ch) return res.status(403).json({ error: 'Это не ваш канал' });
-    }
-    u.pinnedChannel = chatId;
-    write(F.users, users);
-    await persist();
-    res.json({ success: true, pinnedChannel: chatId });
 });
 
 // ---------- WebSocket ----------
