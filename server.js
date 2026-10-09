@@ -1842,10 +1842,33 @@ app.delete('/api/admin/users/:id', adminOnly, async (req, res) => {
     });
     write(F.chats, remaining);
 
-    // 5. Юзернеймы освобождаются: просто удаляем пользователя из списка
+    // 5. Удаляем все сообщения пользователя во всех публичных чатах
+    //    (полное удаление — не как в Telegram, а как просил пользователь)
+    const msgs = read(F.messages);
+    const userMsgIds = new Set(msgs.filter(m => m.senderId === u.id).map(m => m.id));
+    write(F.messages, msgs.filter(m => m.senderId !== u.id));
+
+    // 6. Снимаем закреплённые сообщения пользователя в чатах
+    const chats2 = read(F.chats);
+    chats2.forEach(c => {
+        if (c.pin && userMsgIds.has(c.pin.id)) delete c.pin;
+        if (c.pins) c.pins = c.pins.filter(id => !userMsgIds.has(id));
+    });
+    write(F.chats, chats2);
+
+    // 7. Удаляем блокировки (где пользователь блокировал или был заблокирован)
+    const blocks = read(F.blocks);
+    write(F.blocks, blocks.filter(b => b.from !== u.id && b.to !== u.id));
+
+    // 8. Удаляем подарки пользователя
+    const gifts = read(F.gifts);
+    write(F.gifts, gifts.filter(g => g.ownerId !== u.id && g.senderId !== u.id));
+
+    // 9. Удаляем листинги юзернеймов других пользователей купленных этим пользователем
+    //    и освобождаем юзернеймы: просто удаляем пользователя из списка
     write(F.users, users.filter(x => x.id !== u.id));
 
-    // 6. Уведомляем всех об изменении чатов
+    // 10. Уведомляем всех об изменении чатов
     broadcast({ type: 'chat' });
     await persist();
     res.json({ success: true, deleted: u.username || u.id });
